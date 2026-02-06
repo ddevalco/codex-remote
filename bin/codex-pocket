@@ -8,6 +8,7 @@ set -euo pipefail
 APP_DIR="${CODEX_POCKET_HOME:-$HOME/.codex-pocket}"
 CONFIG_JSON="$APP_DIR/config.json"
 LABEL="com.codex.pocket"
+PID_FILE="$APP_DIR/server.pid"
 
 bold=$'\033[1m'
 reset=$'\033[0m'
@@ -31,6 +32,22 @@ USAGE
 
 need_cmd() {
   command -v "$1" >/dev/null 2>&1 || { echo "Missing dependency: $1" >&2; exit 1; }
+}
+
+resolve_bun() {
+  if command -v bun >/dev/null 2>&1; then
+    command -v bun
+    return 0
+  fi
+  if [[ -x "$HOME/.bun/bin/bun" ]]; then
+    echo "$HOME/.bun/bin/bun"
+    return 0
+  fi
+  if [[ -x "/opt/homebrew/bin/bun" ]]; then
+    echo "/opt/homebrew/bin/bun"
+    return 0
+  fi
+  return 1
 }
 
 read_config() {
@@ -88,13 +105,59 @@ cmd_doctor() {
 cmd_start() {
   read_config
   local plist="$HOME/Library/LaunchAgents/${LABEL}.plist"
+  local bun_bin
+  bun_bin="$(resolve_bun || true)"
+  if [[ -z "${bun_bin:-}" ]]; then
+    echo "bun is required to start the service." >&2
+    exit 1
+  fi
+
   if [[ ! -f "$plist" ]]; then
     echo "Missing launchd plist: $plist" >&2
     echo "Re-run installer." >&2
     exit 1
   fi
+
+  # Prefer launchd, but fall back to a PID-based background process if launchctl is blocked.
   launchctl unload "$plist" >/dev/null 2>&1 || true
-  launchctl load "$plist"
+  load_out="$(launchctl load "$plist" 2>&1)" || true
+  if echo "$load_out" | grep -qi "Load failed: 5"; then
+    echo "launchctl load failed (error 5). Starting in background instead (no auto-start on login)." >&2
+    rm -f "$PID_FILE" >/dev/null 2>&1 || true
+    touch "$APP_DIR/server.log" >/dev/null 2>&1 || true
+    nohup env \
+      ZANE_LOCAL_TOKEN="$(token)" \
+      ZANE_LOCAL_HOST="127.0.0.1" \
+      ZANE_LOCAL_PORT="8790" \
+      ZANE_LOCAL_DB="$(python3 - "$CONFIG_JSON" <<'PY'
+import json,sys
+with open(sys.argv[1]) as f:
+  d=json.load(f)
+print(d.get("db",""))
+PY
+)" \
+      ZANE_LOCAL_RETENTION_DAYS="$(python3 - "$CONFIG_JSON" <<'PY'
+import json,sys
+with open(sys.argv[1]) as f:
+  d=json.load(f)
+print(d.get("retentionDays",14))
+PY
+)" \
+      ZANE_LOCAL_UI_DIST_DIR="$APP_DIR/app/dist" \
+      ZANE_LOCAL_ANCHOR_CWD="$APP_DIR/app/services/anchor" \
+      ZANE_LOCAL_ANCHOR_LOG="$APP_DIR/anchor.log" \
+      ANCHOR_HOST="127.0.0.1" \
+      ANCHOR_PORT="8788" \
+      ZANE_LOCAL_AUTOSTART_ANCHOR="1" \
+      "$bun_bin" run "$APP_DIR/app/services/local-orbit/src/index.ts" >>"$APP_DIR/server.log" 2>&1 &
+    echo $! >"$PID_FILE"
+    echo "Started (background pid: $(cat "$PID_FILE"))"
+    return 0
+  fi
+
+  if [[ -n "$load_out" ]]; then
+    echo "$load_out" >&2
+  fi
   echo "Started ($LABEL)"
 }
 
@@ -102,6 +165,15 @@ cmd_stop() {
   local plist="$HOME/Library/LaunchAgents/${LABEL}.plist"
   if [[ -f "$plist" ]]; then
     launchctl unload "$plist" >/dev/null 2>&1 || true
+  fi
+
+  if [[ -f "$PID_FILE" ]]; then
+    local pid
+    pid="$(cat "$PID_FILE" 2>/dev/null || true)"
+    if [[ -n "$pid" ]]; then
+      kill "$pid" >/dev/null 2>&1 || true
+    fi
+    rm -f "$PID_FILE" >/dev/null 2>&1 || true
   fi
   echo "Stopped ($LABEL)"
 }

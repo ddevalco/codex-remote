@@ -259,7 +259,28 @@ chmod 600 "$CONFIG_JSON" || true
 
 LA_DIR="$HOME/Library/LaunchAgents"
 PLIST="$LA_DIR/com.codex.pocket.plist"
+PID_FILE="$APP_DIR/server.pid"
 mkdir -p "$LA_DIR"
+
+start_background() {
+  # Fallback when launchctl is blocked (some environments/MDM policies).
+  rm -f "$PID_FILE" >/dev/null 2>&1 || true
+  touch "$APP_DIR/server.log" >/dev/null 2>&1 || true
+  nohup env \
+    ZANE_LOCAL_TOKEN="$ZANE_LOCAL_TOKEN" \
+    ZANE_LOCAL_HOST="127.0.0.1" \
+    ZANE_LOCAL_PORT="8790" \
+    ZANE_LOCAL_DB="$DB_PATH" \
+    ZANE_LOCAL_RETENTION_DAYS="14" \
+    ZANE_LOCAL_UI_DIST_DIR="$APP_DIR/app/dist" \
+    ZANE_LOCAL_ANCHOR_CWD="$APP_DIR/app/services/anchor" \
+    ZANE_LOCAL_ANCHOR_LOG="$ANCHOR_LOG" \
+    ANCHOR_HOST="127.0.0.1" \
+    ANCHOR_PORT="8788" \
+    ZANE_LOCAL_AUTOSTART_ANCHOR="1" \
+    "$BUN_BIN" run "$APP_DIR/app/services/local-orbit/src/index.ts" >>"$APP_DIR/server.log" 2>&1 &
+  echo $! >"$PID_FILE"
+}
 
 step "Installing launchd agent to $PLIST"
 cat > "$PLIST" <<PLISTXML
@@ -315,7 +336,15 @@ cat > "$PLIST" <<PLISTXML
 PLISTXML
 
 launchctl unload "$PLIST" >/dev/null 2>&1 || true
-launchctl load "$PLIST"
+load_out="$(launchctl load "$PLIST" 2>&1)" || true
+if echo "$load_out" | grep -qi "Load failed: 5"; then
+  echo "Warning: launchd could not load the agent (launchctl error 5)." >&2
+  echo "Falling back to starting the service in the background (no auto-start on login)." >&2
+  start_background
+elif [[ -n "$load_out" ]]; then
+  # Non-fatal warnings (launchctl is chatty on newer macOS).
+  echo "$load_out" >&2
+fi
 
 step "Waiting for service to start"
 if wait_for_local_orbit; then
