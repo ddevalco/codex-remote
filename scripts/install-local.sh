@@ -15,6 +15,27 @@ reset=$'\033[0m'
 
 abort() { echo "Error: $*" >&2; exit 1; }
 
+# Bun is often installed at ~/.bun/bin and may not be on PATH in non-interactive shells.
+if [[ -d "$HOME/.bun/bin" ]]; then
+  export PATH="$HOME/.bun/bin:$PATH"
+fi
+
+resolve_bun() {
+  if command -v bun >/dev/null 2>&1; then
+    command -v bun
+    return 0
+  fi
+  if [[ -x "$HOME/.bun/bin/bun" ]]; then
+    echo "$HOME/.bun/bin/bun"
+    return 0
+  fi
+  if [[ -x "/opt/homebrew/bin/bun" ]]; then
+    echo "/opt/homebrew/bin/bun"
+    return 0
+  fi
+  return 1
+}
+
 need_cmd() {
   command -v "$1" >/dev/null 2>&1 || abort "Missing dependency: $1"
 }
@@ -42,7 +63,10 @@ need_cmd_or_prompt_install() {
 step "Checking dependencies"
 need_cmd git
 
-if ! need_cmd_or_prompt_install bun "Install Bun first: https://bun.sh"; then
+BUN_BIN="$(resolve_bun || true)"
+if [[ -z "${BUN_BIN:-}" ]]; then
+  echo "Missing dependency: bun" >&2
+  echo "Install Bun first: https://bun.sh" >&2
   exit 1
 fi
 
@@ -82,8 +106,8 @@ else
 fi
 
 step "Installing dependencies"
-(cd "$APP_DIR/app" && bun install)
-(cd "$APP_DIR/app/services/anchor" && bun install)
+(cd "$APP_DIR/app" && "$BUN_BIN" install)
+(cd "$APP_DIR/app/services/anchor" && "$BUN_BIN" install)
 
 step "Generating access token"
 if [[ -z "${ZANE_LOCAL_TOKEN:-}" ]]; then
@@ -99,7 +123,7 @@ PY
 fi
 
 step "Building UI"
-(cd "$APP_DIR/app" && VITE_ZANE_LOCAL=1 bun run build)
+(cd "$APP_DIR/app" && VITE_ZANE_LOCAL=1 "$BUN_BIN" run build)
 
 CONFIG_JSON="$APP_DIR/config.json"
 DB_PATH="$APP_DIR/zane.db"
@@ -138,7 +162,7 @@ cat > "$PLIST" <<PLISTXML
   <string>com.codex.remote</string>
   <key>ProgramArguments</key>
   <array>
-    <string>bun</string>
+    <string>${BUN_BIN}</string>
     <string>run</string>
     <string>${APP_DIR}/app/services/local-orbit/src/index.ts</string>
   </array>
