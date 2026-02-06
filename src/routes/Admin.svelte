@@ -3,7 +3,6 @@
   import { socket } from "../lib/socket.svelte";
   import { theme } from "../lib/theme.svelte";
   import { auth } from "../lib/auth.svelte";
-  import QRCode from "qrcode";
 
   type Status = {
     daemon: { host: string; port: number };
@@ -17,8 +16,7 @@
   let busy = $state(false);
   let logs = $state<string>("");
   let pair = $state<{ code: string; pairUrl: string; expiresAt: number } | null>(null);
-  let pairQrSvg = $state<string>("");
-  let pairQrDataUrl = $state<string>("");
+  let pairQrObjectUrl = $state<string>("");
 
   async function loadStatus() {
     statusError = null;
@@ -97,32 +95,28 @@
   }
 
   async function updateQr() {
-    if (!pair?.pairUrl) {
-      pairQrSvg = "";
-      pairQrDataUrl = "";
+    // Security: load QR as an image blob using Authorization header, not by putting the token in a querystring.
+    if (!pair?.code) {
+      if (pairQrObjectUrl) URL.revokeObjectURL(pairQrObjectUrl);
+      pairQrObjectUrl = "";
       return;
     }
     try {
-      // Browser-safe path: render a PNG data URL.
-      // Some environments/bundlers have trouble with the SVG string path.
-      pairQrDataUrl = await QRCode.toDataURL(pair.pairUrl, {
-        margin: 1,
-        width: 260,
-        errorCorrectionLevel: "M",
-      });
-
-      // Also try SVG for crisp scaling; if this fails we still have the PNG.
-      pairQrSvg = await QRCode.toString(pair.pairUrl, {
-        type: "svg",
-        margin: 1,
-        width: 260,
-        errorCorrectionLevel: "M",
-      });
-    } catch (e) {
-      pairQrSvg = "";
-      if (!pairQrDataUrl) {
-        pairError = e instanceof Error ? `QR generation failed: ${e.message}` : "QR generation failed";
+      const headers: Record<string, string> = {};
+      if (auth.token) headers.authorization = `Bearer ${auth.token}`;
+      const res = await fetch(`/admin/pair/qr.svg?code=${encodeURIComponent(pair.code)}`, { headers });
+      if (!res.ok) {
+        const t = await res.text().catch(() => "");
+        throw new Error(t || `QR failed (${res.status})`);
       }
+      const blob = await res.blob();
+      const nextUrl = URL.createObjectURL(blob);
+      if (pairQrObjectUrl) URL.revokeObjectURL(pairQrObjectUrl);
+      pairQrObjectUrl = nextUrl;
+    } catch (e) {
+      if (pairQrObjectUrl) URL.revokeObjectURL(pairQrObjectUrl);
+      pairQrObjectUrl = "";
+      pairError = e instanceof Error ? e.message : "QR generation failed";
     }
   }
 
@@ -160,6 +154,11 @@
   $effect(() => {
     // If the pair changes for any reason, re-render the QR.
     void updateQr();
+
+    // Cleanup object URL on component teardown.
+    return () => {
+      if (pairQrObjectUrl) URL.revokeObjectURL(pairQrObjectUrl);
+    };
   });
 </script>
 
@@ -235,10 +234,8 @@
             <div class="k">Link</div>
             <div class="v"><a href={pair.pairUrl}>{pair.pairUrl}</a></div>
           </div>
-          {#if pairQrDataUrl}
-            <div class="qr"><img alt="Pairing QR code" src={pairQrDataUrl} /></div>
-          {:else if pairQrSvg}
-            <div class="qr">{@html pairQrSvg}</div>
+          {#if pairQrObjectUrl}
+            <div class="qr"><img alt="Pairing QR code" src={pairQrObjectUrl} /></div>
           {:else}
             <p class="hint hint-error">QR did not render. Open the Link above on your iPhone.</p>
           {/if}
