@@ -40,7 +40,7 @@ If you do not have Tailscale yet:
 Expose the service on your tailnet (run on Mac):
 
 ```bash
-tailscale serve https / http://127.0.0.1:8790
+tailscale serve --bg http://127.0.0.1:8790
 ```
 
 Then open on iPhone:

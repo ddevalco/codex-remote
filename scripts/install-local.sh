@@ -279,7 +279,9 @@ launchctl load "$PLIST"
 
 step "Expose via Tailscale (recommended)"
 if confirm "Configure 'tailscale serve' for iPhone access now?"; then
-  "$TAILSCALE_BIN" serve https / http://127.0.0.1:8790
+  # Tailscale Serve CLI changed; prefer the new syntax.
+  # We serve the local-orbit HTTP server; local-orbit handles UI + WebSockets on the same origin.
+  "$TAILSCALE_BIN" serve --bg http://127.0.0.1:8790
   echo "Tailscale serve configured."
 else
   echo "Skipping tailscale serve configuration."
@@ -289,7 +291,7 @@ cat <<EON
 
 To expose on your tailnet:
 
-  tailscale serve https / http://127.0.0.1:8790
+  tailscale serve --bg http://127.0.0.1:8790
 
 Then open on iPhone:
   https://$(tailscale status --json 2>/dev/null | python3 - <<'PY'

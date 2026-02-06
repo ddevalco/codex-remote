@@ -9,7 +9,7 @@ Recommended exposure pattern:
 - you expose it via:
 
 ```bash
-tailscale serve https / http://127.0.0.1:8790
+tailscale serve --bg http://127.0.0.1:8790
 ```
 
 Do not bind local-orbit to `0.0.0.0` unless you are intentionally serving it on your LAN.
@@ -52,4 +52,3 @@ If you want to disable persistence entirely, we can add a flag to stop writing e
 ## 6) Separate Users (Optional)
 
 If multiple people use the same Mac account, create a dedicated macOS user for Codex Remote.
-
