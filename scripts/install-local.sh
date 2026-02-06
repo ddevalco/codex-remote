@@ -362,7 +362,7 @@ try:
 except Exception:
   print("<your-magicdns-host>")')
 
-Token (save this):
+Access Token (save this):
   ${ZANE_LOCAL_TOKEN}
 
 EON
@@ -378,7 +378,7 @@ echo "Install dir:      $APP_DIR/app"
 echo "Config:           $CONFIG_JSON"
 echo "Local URL:        http://127.0.0.1:8790"
 echo "Admin URL:        http://127.0.0.1:8790/admin"
-echo "Token:            $ZANE_LOCAL_TOKEN"
+echo "Access Token:     $ZANE_LOCAL_TOKEN"
 echo "Launchd agent:    $PLIST"
 echo "Logs:             $APP_DIR/server.log"
 echo "Anchor logs:      $ANCHOR_LOG"
