@@ -353,15 +353,14 @@ To expose on your tailnet:
   $TAILSCALE_BIN serve --bg http://127.0.0.1:8790
 
 Then open on iPhone:
-  https://$("$TAILSCALE_BIN" status --json 2>/dev/null | python3 - <<'PY'
-import json,sys
+  https://$("$TAILSCALE_BIN" status --json 2>/dev/null | python3 -c 'import json,sys
 try:
   d=json.load(sys.stdin)
-  print(d.get('Self',{}).get('DNSName','<your-magicdns-host>'))
+  name=d.get("Self",{}).get("DNSName","<your-magicdns-host>")
+  # Tailscale typically includes a trailing dot.
+  print(name[:-1] if isinstance(name,str) and name.endswith(".") else name)
 except Exception:
-  print('<your-magicdns-host>')
-PY
-)
+  print("<your-magicdns-host>")')
 
 Token (save this):
   ${ZANE_LOCAL_TOKEN}
@@ -385,15 +384,13 @@ echo "Logs:             $APP_DIR/server.log"
 echo "Anchor logs:      $ANCHOR_LOG"
 
 if "$TAILSCALE_BIN" status >/dev/null 2>&1; then
-  dns_name="$("$TAILSCALE_BIN" status --json 2>/dev/null | python3 - <<'PY'
-import json,sys
+  dns_name="$("$TAILSCALE_BIN" status --json 2>/dev/null | python3 -c 'import json,sys
 try:
   d=json.load(sys.stdin)
-  print(d.get('Self',{}).get('DNSName',''))
+  name=d.get("Self",{}).get("DNSName","")
+  print(name[:-1] if isinstance(name,str) and name.endswith(".") else name)
 except Exception:
-  print('')
-PY
-)"
+  print("")')"
   if [[ -n "${dns_name:-}" ]]; then
     echo "Tailnet URL:      https://$dns_name/"
     echo "Tailnet Admin:    https://$dns_name/admin"
