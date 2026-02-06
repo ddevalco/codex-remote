@@ -1,0 +1,8 @@
+{
+  "name": "zane-local-daemon",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun run src/index.ts"
+  }
+}

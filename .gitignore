@@ -1,0 +1,31 @@
+# dependencies
+node_modules
+
+# output
+out
+dist
+*.tgz
+
+# code coverage
+coverage
+*.lcov
+
+# logs
+logs
+*.log
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# environment variables
+.env
+.env.*
+!.env.example
+
+# caches
+.eslintcache
+.cache
+*.tsbuildinfo
+
+# misc
+.DS_Store
+.ideas
+.docs

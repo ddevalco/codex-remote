@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": ["./worker-configuration.d.ts"],
+    "typeRoots": ["./", "../../node_modules/@types"],
+    "noEmit": true
+  },
+  "include": ["src"]
+}

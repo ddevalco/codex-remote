@@ -1,0 +1,8 @@
+name = "zane"
+pages_build_output_dir = "dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "zane"
+database_id = "ca5a5a6b-6822-4246-8fc2-136ed5b1c6a0"
+migrations_dir = "migrations"

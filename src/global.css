@@ -1,0 +1,60 @@
+@import "./lib/styles/tokens.css";
+@import "./lib/styles/layout.css";
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: var(--font-mono);
+  color: var(--cli-text);
+  background: var(--cli-bg);
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+#app {
+  height: 100%;
+}
+
+
+/* Smooth theme transitions */
+*,
+*::before,
+*::after {
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+/* Prevent iOS Safari auto-zoom on focus (requires >= 16px) */
+input,
+textarea,
+select {
+  font-size: 1rem;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--cli-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--cli-text-muted);
+}

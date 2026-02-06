@@ -1,0 +1,16 @@
+# dependencies
+node_modules/
+services/**/node_modules/
+
+# build outputs
+dist/
+.svelte-kit/
+.wrangler/
+
+# generated files
+*.lock
+*.log
+
+# misc
+data/
+.ideas/

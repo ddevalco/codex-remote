@@ -1,0 +1,9 @@
+{
+  "name": "zane-local-orbit",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun run src/index.ts"
+  },
+  "dependencies": {}
+}

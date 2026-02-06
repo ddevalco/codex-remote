@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# zane-local: lightweight control CLI for the local-only stack.
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+STATE_DIR="${ZANE_STATE_DIR:-$HOME/.zane-local}"
+mkdir -p "$STATE_DIR"
+
+usage() {
+  cat <<USAGE
+Usage: zane-local <command>
+
+Commands:
+  token           Generate a random access token
+  up              Print the environment variables you should export
+  daemon          Run the daemon in the foreground
+  local-orbit     Run local-orbit in the foreground
+  anchor          Run anchor in the foreground
+
+Notes:
+- For remote iPhone access, expose ports using 'tailscale serve'.
+USAGE
+}
+
+cmd_token() {
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -hex 32
+  else
+    python3 - <<'PY'
+import secrets
+print(secrets.token_hex(32))
+PY
+  fi
+}
+
+cmd_up() {
+  local token="${ZANE_LOCAL_TOKEN:-}"
+  if [[ -z "$token" ]]; then
+    echo "ZANE_LOCAL_TOKEN is not set. Run: zane-local token" >&2
+    exit 1
+  fi
+
+  cat <<EOF2
+# Local mode
+export VITE_ZANE_LOCAL=1
+export ZANE_LOCAL_TOKEN="$token"
+
+# local-orbit
+export ZANE_LOCAL_HOST=127.0.0.1
+export ZANE_LOCAL_PORT=8790
+export ZANE_LOCAL_DB="$STATE_DIR/zane.db"
+
+# anchor
+export ANCHOR_HOST=127.0.0.1
+export ANCHOR_PORT=8788
+export ANCHOR_ORBIT_URL="ws://127.0.0.1:8790/ws/anchor"
+export ZANE_ANCHOR_JWT_SECRET="$token"
+EOF2
+}
+
+cmd_daemon() {
+  (cd "$ROOT_DIR/services/daemon" && bun run src/index.ts)
+}
+
+cmd_local_orbit() {
+  (cd "$ROOT_DIR/services/local-orbit" && bun run src/index.ts)
+}
+
+cmd_anchor() {
+  (cd "$ROOT_DIR/services/anchor" && bun run src/index.ts)
+}
+
+main() {
+  local cmd="${1:-}"
+  case "$cmd" in
+    token) shift; cmd_token "$@";;
+    up) shift; cmd_up "$@";;
+    daemon) shift; cmd_daemon "$@";;
+    local-orbit) shift; cmd_local_orbit "$@";;
+    anchor) shift; cmd_anchor "$@";;
+    -h|--help|help|"") usage;;
+    *)
+      echo "Unknown command: $cmd" >&2
+      usage
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"

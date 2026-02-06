@@ -1,0 +1,16 @@
+{
+  "name": "anchor",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun --env-file ../../.env --hot src/index.ts",
+    "start": "bun --env-file ../../.env src/index.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.7.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}

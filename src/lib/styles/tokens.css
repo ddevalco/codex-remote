@@ -1,0 +1,241 @@
+:root {
+  /* ==================== */
+  /* Static tokens        */
+  /* ==================== */
+
+  /* Spacing */
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+
+  /* Border radius */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  /* Typography */
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  /* Font sizes */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+
+  /* Layout */
+  --app-max-width: 1100px;
+
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-normal: 200ms ease;
+
+  /* ==================== */
+  /* Light mode (default) */
+  /* ==================== */
+
+  /* Message role colors */
+  --color-user: #2563eb;
+  --color-assistant: #16a34a;
+  --color-reasoning: #7c3aed;
+  --color-tool: #d97706;
+  --color-approval: #d97706;
+  --color-error: #dc2626;
+
+  /* CLI Terminal Colors - Light */
+  --cli-bg: #fafafa;
+  --cli-bg-elevated: #ffffff;
+  --cli-bg-user: rgba(22, 163, 74, 0.12);
+  --cli-text: #1f2937;
+  --cli-text-dim: #4b5563;
+  --cli-text-muted: #9ca3af;
+  --cli-prefix-user: #2563eb;
+  --cli-prefix-agent: #16a34a;
+  --cli-prefix-tool: #d97706;
+  --cli-prefix-reasoning: #7c3aed;
+  --cli-prefix-file: #0891b2;
+  --cli-prefix-mcp: #7c3aed;
+  --cli-prefix-web: #0d9488;
+  --cli-prefix-image: #db2777;
+  --cli-prefix-review: #6366f1;
+  --cli-success: #16a34a;
+  --cli-warning: #d97706;
+  --cli-error: #dc2626;
+  --cli-border: #e5e7eb;
+  --cli-bg-hover: #f3f4f6;
+  --cli-selection: rgba(22, 163, 74, 0.1);
+
+  /* Chrome (non-code UI) */
+  --color-bg: #ffffff;
+  --color-bg-muted: #f9fafb;
+  --color-bg-code: #1e1e1e;
+  --color-border: #e5e7eb;
+  --color-border-strong: #d1d5db;
+  --color-text: #111827;
+  --color-text-muted: #6b7280;
+  --color-text-inverse: #ffffff;
+
+  /* Button colors */
+  --color-btn-primary-bg: #111827;
+  --color-btn-primary-text: #ffffff;
+  --color-btn-secondary-bg: #f3f4f6;
+  --color-btn-secondary-text: #374151;
+  --color-btn-danger-bg: #fef2f2;
+  --color-btn-danger-text: #dc2626;
+  --color-btn-success-bg: #f0fdf4;
+  --color-btn-success-text: #16a34a;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --shadow-focus: 0 0 0 3px rgba(255, 255, 255, 0.05);
+  --shadow-popover: 0 4px 12px rgba(0, 0, 0, 0.3);
+
+  /* UI surfaces */
+  --cli-error-bg: rgba(220, 38, 38, 0.1);
+
+  /* Sizes */
+  --size-progress-width: 100px;
+  --size-progress-height: 4px;
+}
+
+/* ==================== */
+/* Dark mode            */
+/* ==================== */
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    /* Message role colors - brighter for dark bg */
+    --color-user: #60a5fa;
+    --color-assistant: #4ade80;
+    --color-reasoning: #a78bfa;
+    --color-tool: #fbbf24;
+    --color-approval: #fbbf24;
+    --color-error: #f87171;
+
+    /* CLI Terminal Colors - Dark */
+    --cli-bg: #1a1a1a;
+    --cli-bg-elevated: #242424;
+    --cli-bg-user: rgba(74, 222, 128, 0.18);
+    --cli-text: #e5e7eb;
+    --cli-text-dim: #9ca3af;
+    --cli-text-muted: #6b7280;
+    --cli-prefix-user: #60a5fa;
+    --cli-prefix-agent: #4ade80;
+    --cli-prefix-tool: #fbbf24;
+    --cli-prefix-reasoning: #c084fc;
+    --cli-prefix-file: #22d3ee;
+    --cli-prefix-mcp: #a78bfa;
+    --cli-prefix-web: #2dd4bf;
+    --cli-prefix-image: #f472b6;
+    --cli-prefix-review: #818cf8;
+    --cli-success: #4ade80;
+    --cli-warning: #fbbf24;
+    --cli-error: #f87171;
+    --cli-border: #374151;
+    --cli-bg-hover: #2d2d2d;
+    --cli-selection: rgba(74, 222, 128, 0.2);
+
+    /* Chrome (non-code UI) */
+    --color-bg: #111827;
+    --color-bg-muted: #1f2937;
+    --color-bg-code: #0d0d0d;
+    --color-border: #374151;
+    --color-border-strong: #4b5563;
+    --color-text: #f9fafb;
+    --color-text-muted: #9ca3af;
+    --color-text-inverse: #111827;
+
+    /* Button colors */
+    --color-btn-primary-bg: #f9fafb;
+    --color-btn-primary-text: #111827;
+    --color-btn-secondary-bg: #374151;
+    --color-btn-secondary-text: #e5e7eb;
+    --color-btn-danger-bg: rgba(248, 113, 113, 0.2);
+    --color-btn-danger-text: #f87171;
+    --color-btn-success-bg: rgba(74, 222, 128, 0.2);
+    --color-btn-success-text: #4ade80;
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+    --shadow-focus: 0 0 0 3px rgba(255, 255, 255, 0.05);
+    --shadow-popover: 0 4px 12px rgba(0, 0, 0, 0.3);
+
+    /* UI surfaces */
+    --cli-error-bg: rgba(220, 38, 38, 0.15);
+
+    /* Sizes */
+    --size-progress-width: 100px;
+    --size-progress-height: 4px;
+  }
+}
+
+/* Manual dark mode override */
+:root[data-theme="dark"] {
+  /* Message role colors - brighter for dark bg */
+  --color-user: #60a5fa;
+  --color-assistant: #4ade80;
+  --color-reasoning: #a78bfa;
+  --color-tool: #fbbf24;
+  --color-approval: #fbbf24;
+  --color-error: #f87171;
+
+  /* CLI Terminal Colors - Dark */
+  --cli-bg: #1a1a1a;
+  --cli-bg-elevated: #242424;
+  --cli-bg-user: rgba(74, 222, 128, 0.18);
+  --cli-text: #e5e7eb;
+  --cli-text-dim: #9ca3af;
+  --cli-text-muted: #6b7280;
+  --cli-prefix-user: #60a5fa;
+  --cli-prefix-agent: #4ade80;
+  --cli-prefix-tool: #fbbf24;
+  --cli-prefix-reasoning: #c084fc;
+  --cli-prefix-file: #22d3ee;
+  --cli-prefix-mcp: #a78bfa;
+  --cli-prefix-web: #2dd4bf;
+  --cli-prefix-image: #f472b6;
+  --cli-prefix-review: #818cf8;
+  --cli-success: #4ade80;
+  --cli-warning: #fbbf24;
+  --cli-error: #f87171;
+  --cli-border: #374151;
+  --cli-bg-hover: #2d2d2d;
+  --cli-selection: rgba(74, 222, 128, 0.2);
+
+  /* Chrome (non-code UI) */
+  --color-bg: #111827;
+  --color-bg-muted: #1f2937;
+  --color-bg-code: #0d0d0d;
+  --color-border: #374151;
+  --color-border-strong: #4b5563;
+  --color-text: #f9fafb;
+  --color-text-muted: #9ca3af;
+  --color-text-inverse: #111827;
+
+  /* Button colors */
+  --color-btn-primary-bg: #f9fafb;
+  --color-btn-primary-text: #111827;
+  --color-btn-secondary-bg: #374151;
+  --color-btn-secondary-text: #e5e7eb;
+  --color-btn-danger-bg: rgba(248, 113, 113, 0.2);
+  --color-btn-danger-text: #f87171;
+  --color-btn-success-bg: rgba(74, 222, 128, 0.2);
+  --color-btn-success-text: #4ade80;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+  --shadow-focus: 0 0 0 3px rgba(255, 255, 255, 0.05);
+  --shadow-popover: 0 4px 12px rgba(0, 0, 0, 0.3);
+
+  /* UI surfaces */
+  --cli-error-bg: rgba(220, 38, 38, 0.15);
+
+  /* Sizes */
+  --size-progress-width: 100px;
+  --size-progress-height: 4px;
+}
