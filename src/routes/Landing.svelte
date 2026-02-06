@@ -32,12 +32,12 @@
 </script>
 
 <svelte:head>
-  <title>Zane</title>
+  <title>Codex Remote</title>
 </svelte:head>
 
 <div class="landing stack">
   <header class="landing-header">
-    <div class="brand">zane</div>
+    <div class="brand">codex-remote</div>
     <div class="header-actions">
       {#if pwa.canInstall && !pwa.isStandalone}
         <button class="ghost-btn" type="button" onclick={() => pwa.install()}>Install app</button>
@@ -55,7 +55,7 @@
     <div class="hero-copy stack">
       <h1>Remote control for your local Codex.</h1>
       <p>
-        Zane lets you start and supervise Codex CLI sessions running on your Mac from a handheld web client.
+        Control Codex sessions running on your Mac from your iPhone over Tailscale.
       </p>
       {#if !isSignedIn}
         <div class="hero-actions row">
@@ -72,8 +72,8 @@
       <p>A lightweight daemon on your Mac that spawns and manages Codex CLI sessions. Your code never leaves the machine.</p>
     </div>
     <div class="feature">
-      <span class="feature-label">Orbit</span>
-      <p>A Cloudflare relay that connects your devices to Anchor over a secure tunnel. No port-forwarding, no VPN.</p>
+      <span class="feature-label">Tailnet</span>
+      <p>Runs entirely on your tailnet (Tailscale). No Cloudflare, no public exposure required.</p>
     </div>
     <div class="feature">
       <span class="feature-label">Handheld</span>
@@ -82,7 +82,7 @@
   </section>
 
   <footer class="landing-footer">
-    <a class="footer-link" href="https://github.com/z-siddiqi/zane" target="_blank" rel="noopener">GitHub</a>
+    <a class="footer-link" href="https://github.com/ddevalco/codex-remote" target="_blank" rel="noopener">GitHub</a>
   </footer>
 
   {#if showAuthModal}

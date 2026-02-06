@@ -14,7 +14,7 @@
     <div class="auth-shell stack">
         <div class="auth-card stack">
             <div class="auth-title">Checking session</div>
-            <div class="auth-subtitle">Waiting for passkey status...</div>
+            <div class="auth-subtitle">Loading local session...</div>
         </div>
     </div>
 {:else if auth.status === "signed_in" || route.pathname === "/"}
@@ -22,8 +22,8 @@
 {:else if auth.status === "needs_setup"}
     <div class="auth-shell stack">
         <div class="auth-card stack">
-            <div class="auth-title">Welcome to Zane</div>
-            <div class="auth-subtitle">Create your account to get started.</div>
+            <div class="auth-title">Welcome to Codex Remote</div>
+            <div class="auth-subtitle">Local mode does not support account registration. Use an access token.</div>
 
             {#if auth.error}
                 <div class="auth-error">{auth.error}</div>
@@ -32,7 +32,7 @@
             <input
                 type="text"
                 class="auth-input"
-                placeholder="Username"
+                placeholder="Access token"
                 bind:value={newUsername}
                 onkeydown={(e) => { if (e.key === "Enter" && newUsername.trim()) auth.register(newUsername.trim()); }}
             />
@@ -42,7 +42,7 @@
                 onclick={() => auth.register(newUsername.trim())}
                 disabled={auth.busy || !newUsername.trim()}
             >
-                {auth.busy ? "Working..." : "Create passkey"}
+                {auth.busy ? "Working..." : "Continue"}
             </button>
         </div>
     </div>
@@ -51,7 +51,7 @@
         <div class="auth-card stack">
             {#if mode === "login"}
                 <div class="auth-title">Sign in</div>
-                <div class="auth-subtitle">Use your passkey to unlock Zane.</div>
+                <div class="auth-subtitle">Enter your access token to unlock Codex Remote.</div>
 
                 {#if auth.error}
                     <div class="auth-error">{auth.error}</div>
@@ -60,7 +60,7 @@
                 <input
                     type="text"
                     class="auth-input"
-                    placeholder="Username"
+                    placeholder="Access token"
                     bind:value={username}
                     onkeydown={(e) => { if (e.key === "Enter" && username.trim()) auth.signIn(username.trim()); }}
                 />
@@ -70,14 +70,14 @@
                     onclick={() => auth.signIn(username.trim())}
                     disabled={auth.busy || !username.trim()}
                 >
-                    {auth.busy ? "Working..." : "Sign in with passkey"}
+                    {auth.busy ? "Working..." : "Sign in"}
                 </button>
                 <button type="button" class="link" onclick={() => { mode = "register"; auth.error = null; }}>
-                    Create new account
+                    I need a token
                 </button>
             {:else}
-                <div class="auth-title">Create account</div>
-                <div class="auth-subtitle">Register a new account with a passkey.</div>
+                <div class="auth-title">Get a token</div>
+                <div class="auth-subtitle">Ask your Mac admin to generate a pairing QR from /admin.</div>
 
                 {#if auth.error}
                     <div class="auth-error">{auth.error}</div>
@@ -86,7 +86,7 @@
                 <input
                     type="text"
                     class="auth-input"
-                    placeholder="Username"
+                    placeholder="Access token"
                     bind:value={newUsername}
                     onkeydown={(e) => { if (e.key === "Enter" && newUsername.trim()) auth.register(newUsername.trim()); }}
                 />
@@ -96,7 +96,7 @@
                     onclick={() => auth.register(newUsername.trim())}
                     disabled={auth.busy || !newUsername.trim()}
                 >
-                    {auth.busy ? "Working..." : "Create passkey"}
+                    {auth.busy ? "Working..." : "Continue"}
                 </button>
                 <button type="button" class="link" onclick={() => { mode = "login"; auth.error = null; }}>
                     Back to sign in

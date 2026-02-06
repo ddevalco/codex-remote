@@ -30,6 +30,23 @@ if ! command -v codex >/dev/null 2>&1; then
   echo "Warning: codex CLI not found. Install it before using Anchor." >&2
 fi
 
+step "Checking Tailscale state"
+if tailscale status >/dev/null 2>&1; then
+  echo "Tailscale: running"
+else
+  cat <<'EOT' >&2
+Tailscale does not appear to be running or logged in.
+
+Next steps:
+1. Install Tailscale and sign in (https://tailscale.com/download)
+2. Run: tailscale up
+3. Re-run this installer.
+
+You can still use Codex Remote on this Mac locally at http://127.0.0.1:8790 once installed,
+but remote iPhone access requires Tailscale.
+EOT
+fi
+
 mkdir -p "$APP_DIR"
 
 step "Installing app to $APP_DIR/app"

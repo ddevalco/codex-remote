@@ -26,7 +26,6 @@ export default defineConfig([
       "node_modules/**",
       "dist/**",
       ".docs/**",
-      ".wrangler/**",
       ".svelte-kit/**",
       "services/**/node_modules/**",
     ],

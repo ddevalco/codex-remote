@@ -3,6 +3,7 @@
   import { socket } from "../lib/socket.svelte";
   import { theme } from "../lib/theme.svelte";
   import { auth } from "../lib/auth.svelte";
+  import QRCode from "qrcode";
 
   type Status = {
     daemon: { host: string; port: number };
@@ -15,6 +16,7 @@
   let busy = $state(false);
   let logs = $state<string>("");
   let pair = $state<{ code: string; pairUrl: string; expiresAt: number } | null>(null);
+  let pairQrSvg = $state<string>("");
 
   async function loadStatus() {
     error = null;
@@ -86,14 +88,21 @@
     }
   }
 
-  function esc(s: string): string {
-    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\"/g, "&quot;");
-  }
-
-  function qrSvg(url: string): string {
-    // Lightweight placeholder: render as a simple link box if QR lib isn't bundled.
-    // We'll replace with a real QR generator next.
-    return `<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"320\" height=\"120\"><rect width=\"100%\" height=\"100%\" fill=\"rgba(0,0,0,0.35)\" stroke=\"rgba(255,255,255,0.1)\"/><text x=\"16\" y=\"32\" fill=\"#fff\" font-family=\"monospace\" font-size=\"12\">Pair URL:</text><text x=\"16\" y=\"56\" fill=\"#9ef\" font-family=\"monospace\" font-size=\"11\">${esc(url).slice(0, 44)}</text><text x=\"16\" y=\"76\" fill=\"#9ef\" font-family=\"monospace\" font-size=\"11\">${esc(url).slice(44, 88)}</text></svg>`;
+  async function updateQr() {
+    if (!pair?.pairUrl) {
+      pairQrSvg = "";
+      return;
+    }
+    try {
+      pairQrSvg = await QRCode.toString(pair.pairUrl, {
+        type: "svg",
+        margin: 1,
+        width: 260,
+        errorCorrectionLevel: "M",
+      });
+    } catch {
+      pairQrSvg = "";
+    }
   }
 
   async function newPair() {
@@ -112,6 +121,7 @@
         throw new Error(data?.error || `pair failed (${res.status})`);
       }
       pair = { code: data.code, pairUrl: data.pairUrl, expiresAt: data.expiresAt };
+      await updateQr();
     } catch (e) {
       error = e instanceof Error ? e.message : "Failed to create pairing code";
     }
@@ -124,6 +134,11 @@
       loadStatus();
     }, 5000);
     return () => clearInterval(id);
+  });
+
+  $effect(() => {
+    // If the pair changes for any reason, re-render the QR.
+    void updateQr();
   });
 </script>
 
@@ -197,7 +212,9 @@
             <div class="k">Link</div>
             <div class="v"><a href={pair.pairUrl}>{pair.pairUrl}</a></div>
           </div>
-          <div class="qr" {@html qrSvg(pair.pairUrl)} />
+          {#if pairQrSvg}
+            <div class="qr">{@html pairQrSvg}</div>
+          {/if}
         {/if}
       </div>
     </div>

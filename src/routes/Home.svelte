@@ -104,7 +104,7 @@
 </script>
 
 <svelte:head>
-  <title>Zane</title>
+  <title>Codex Remote</title>
 </svelte:head>
 
 <div class="home stack">

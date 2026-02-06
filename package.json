@@ -6,8 +6,6 @@
     "dev": "bunx --bun vite",
     "build": "bunx --bun vite build",
     "preview": "bunx --bun vite preview --port 4173",
-    "deploy": "bun run build && bunx wrangler pages deploy dist --project-name zane --branch main",
-    "migrate": "bunx wrangler d1 migrations apply zane --remote",
     "prepare": "husky"
   },
   "lint-staged": {
@@ -21,6 +19,7 @@
     "dompurify": "^3.3.1",
     "highlight.js": "^11.11.1",
     "marked": "^17.0.1",
+    "qrcode": "^1.5.4",
     "sv-router": "^0.13.0",
     "svelte": "^5.0.0"
   },
