@@ -4,11 +4,30 @@ interface SavedConfig {
   url: string;
 }
 
+function isLocalMode(): boolean {
+  try {
+    return (import.meta as any)?.env?.VITE_ZANE_LOCAL === "1";
+  } catch {
+    return false;
+  }
+}
+
+function defaultWsUrlFromLocation(): string {
+  if (typeof window === "undefined") return "";
+  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${proto}//${window.location.host}/ws`;
+}
+
 class ConfigStore {
   #url = $state("");
 
   constructor() {
     this.#load();
+    // In local mode, auto-default the WS URL to the same origin and keep it stable.
+    if (isLocalMode() && !this.#url) {
+      this.#url = defaultWsUrlFromLocation();
+      this.#save();
+    }
   }
 
   get url() {

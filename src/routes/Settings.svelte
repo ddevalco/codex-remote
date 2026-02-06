@@ -7,6 +7,7 @@
   import AppHeader from "../lib/components/AppHeader.svelte";
   import NotificationSettings from "../lib/components/NotificationSettings.svelte";
   import { anchors } from "../lib/anchors.svelte";
+  const LOCAL_MODE = import.meta.env.VITE_ZANE_LOCAL === "1";
 
   const themeIcons = { system: "◐", light: "○", dark: "●" } as const;
 
@@ -21,6 +22,7 @@
   const urlLocked = $derived(
     socket.status === "connected" || socket.status === "connecting" || socket.status === "reconnecting"
   );
+  const orbitLocked = $derived(LOCAL_MODE || urlLocked);
   const canDisconnect = $derived(
     socket.status === "connected" || socket.status === "connecting" || socket.status === "reconnecting"
   );
@@ -67,9 +69,14 @@
             type="text"
             bind:value={config.url}
             placeholder="wss://orbit.example.com/ws/client"
-            disabled={urlLocked}
+            disabled={orbitLocked}
           />
         </div>
+        {#if LOCAL_MODE}
+          <p class="hint">
+            Local mode: Orbit URL is derived automatically from the site you opened.
+          </p>
+        {/if}
         <div class="connect-actions row">
           <button
             class="connect-btn"

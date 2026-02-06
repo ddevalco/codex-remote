@@ -14,6 +14,7 @@
   let error = $state<string | null>(null);
   let busy = $state(false);
   let logs = $state<string>("");
+  let pair = $state<{ code: string; pairUrl: string; expiresAt: number } | null>(null);
 
   async function loadStatus() {
     error = null;
@@ -85,6 +86,37 @@
     }
   }
 
+  function esc(s: string): string {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\"/g, "&quot;");
+  }
+
+  function qrSvg(url: string): string {
+    // Lightweight placeholder: render as a simple link box if QR lib isn't bundled.
+    // We'll replace with a real QR generator next.
+    return `<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"320\" height=\"120\"><rect width=\"100%\" height=\"100%\" fill=\"rgba(0,0,0,0.35)\" stroke=\"rgba(255,255,255,0.1)\"/><text x=\"16\" y=\"32\" fill=\"#fff\" font-family=\"monospace\" font-size=\"12\">Pair URL:</text><text x=\"16\" y=\"56\" fill=\"#9ef\" font-family=\"monospace\" font-size=\"11\">${esc(url).slice(0, 44)}</text><text x=\"16\" y=\"76\" fill=\"#9ef\" font-family=\"monospace\" font-size=\"11\">${esc(url).slice(44, 88)}</text></svg>`;
+  }
+
+  async function newPair() {
+    error = null;
+    try {
+      const headers: Record<string, string> = { "content-type": "application/json" };
+      if (auth.token) headers.authorization = `Bearer ${auth.token}`;
+      const res = await fetch("/admin/pair/new", { method: "POST", headers, body: "{}" });
+      const data = (await res.json().catch(() => null)) as null | {
+        code?: string;
+        pairUrl?: string;
+        expiresAt?: number;
+        error?: string;
+      };
+      if (!res.ok || !data?.code || !data?.pairUrl || !data?.expiresAt) {
+        throw new Error(data?.error || `pair failed (${res.status})`);
+      }
+      pair = { code: data.code, pairUrl: data.pairUrl, expiresAt: data.expiresAt };
+    } catch (e) {
+      error = e instanceof Error ? e.message : "Failed to create pairing code";
+    }
+  }
+
   $effect(() => {
     loadStatus();
     loadLogs();
@@ -146,6 +178,32 @@
 
     <div class="section stack">
       <div class="section-header">
+        <span class="section-title">Pair iPhone</span>
+      </div>
+      <div class="section-body stack">
+        <p class="hint">Generate a short-lived pairing code, then open the link on your iPhone (or scan once we add real QR).</p>
+        <div class="row buttons">
+          <button class="primary" type="button" onclick={newPair} disabled={!auth.token}>New pairing code</button>
+        </div>
+        {#if !auth.token}
+          <p class="hint hint-error">Sign in first (token required) to create pairing codes.</p>
+        {/if}
+        {#if pair}
+          <div class="kv" style="margin-top: var(--space-md);">
+            <div class="k">Code</div>
+            <div class="v"><code>{pair.code}</code></div>
+            <div class="k">Expires</div>
+            <div class="v">{new Date(pair.expiresAt).toLocaleString()}</div>
+            <div class="k">Link</div>
+            <div class="v"><a href={pair.pairUrl}>{pair.pairUrl}</a></div>
+          </div>
+          <div class="qr" {@html qrSvg(pair.pairUrl)} />
+        {/if}
+      </div>
+    </div>
+
+    <div class="section stack">
+      <div class="section-header">
         <span class="section-title">Anchor logs (tail)</span>
       </div>
       <div class="section-body">
@@ -195,5 +253,8 @@
     padding: var(--space-md);
     border-radius: 10px;
     border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .qr {
+    margin-top: var(--space-md);
   }
 </style>

@@ -7,6 +7,7 @@ import Review from "./routes/Review.svelte";
 import Settings from "./routes/Settings.svelte";
 import Device from "./routes/Device.svelte";
 import Admin from "./routes/Admin.svelte";
+import Pair from "./routes/Pair.svelte";
 
 export const { navigate, route } = createRouter({
   "/": Landing,
@@ -17,4 +18,5 @@ export const { navigate, route } = createRouter({
   "/settings": Settings,
   "/device": Device,
   "/admin": Admin,
+  "/pair": Pair,
 });

@@ -28,6 +28,7 @@ const ANCHOR_ARGS = (process.env.ZANE_LOCAL_ANCHOR_ARGS?.trim() || "run src/inde
 const ANCHOR_LOG_PATH = process.env.ZANE_LOCAL_ANCHOR_LOG ?? `${homedir()}/.zane-local/anchor.log`;
 const ANCHOR_HOST = process.env.ANCHOR_HOST ?? "127.0.0.1";
 const ANCHOR_PORT = Number(process.env.ANCHOR_PORT ?? 8788);
+const PAIR_TTL_SEC = Number(process.env.ZANE_LOCAL_PAIR_TTL_SEC ?? 300);
 
 if (!AUTH_TOKEN) {
   console.error("[local-orbit] ZANE_LOCAL_TOKEN is required");
@@ -147,6 +148,26 @@ function stopAnchor(): { ok: boolean; error?: string } {
     return { ok: false, error: e instanceof Error ? e.message : "Failed to stop anchor" };
   }
 }
+
+function randomPairCode(): string {
+  // Crockford-ish base32 without ambiguous chars.
+  const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+  let out = "";
+  const bytes = crypto.getRandomValues(new Uint8Array(8));
+  for (const b of bytes) out += alphabet[b % alphabet.length];
+  return out;
+}
+
+const pairCodes = new Map<string, { token: string; expiresAt: number }>();
+
+function prunePairCodes(): void {
+  const now = Date.now();
+  for (const [code, rec] of pairCodes) {
+    if (now > rec.expiresAt) pairCodes.delete(code);
+  }
+}
+
+setInterval(prunePairCodes, 60_000).unref?.();
 
 function getBearer(req: Request): string | null {
   const auth = req.headers.get("authorization") ?? "";
@@ -382,6 +403,36 @@ const server = Bun.serve<{ role: Role }>( {
         },
         db: { path: DB_PATH, retentionDays: DB_RETENTION_DAYS },
       });
+    }
+
+    if (url.pathname === "/admin/pair/new" && req.method === "POST") {
+      if (!authorised(req)) return unauth();
+      prunePairCodes();
+      const code = randomPairCode();
+      const expiresAt = Date.now() + PAIR_TTL_SEC * 1000;
+      pairCodes.set(code, { token: AUTH_TOKEN, expiresAt });
+      const origin = `${url.protocol}//${url.host}`;
+      return okJson({
+        code,
+        expiresAt,
+        pairUrl: `${origin}/pair?code=${encodeURIComponent(code)}`,
+      });
+    }
+
+    if (url.pathname === "/pair/consume" && req.method === "POST") {
+      prunePairCodes();
+      const body = (await req.json().catch(() => null)) as null | { code?: string };
+      const code = body?.code?.trim()?.toUpperCase();
+      if (!code) return okJson({ error: "code is required" }, { status: 400 });
+      const rec = pairCodes.get(code);
+      if (!rec) return okJson({ error: "invalid or expired code" }, { status: 400 });
+      if (Date.now() > rec.expiresAt) {
+        pairCodes.delete(code);
+        return okJson({ error: "invalid or expired code" }, { status: 400 });
+      }
+      // One-time use.
+      pairCodes.delete(code);
+      return okJson({ token: rec.token });
     }
 
     if (url.pathname === "/admin/anchor/start" && req.method === "POST") {
