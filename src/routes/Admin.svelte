@@ -17,6 +17,7 @@
   let logs = $state<string>("");
   let pair = $state<{ code: string; pairUrl: string; expiresAt: number } | null>(null);
   let pairQrSvg = $state<string>("");
+  let pairQrDataUrl = $state<string>("");
 
   async function loadStatus() {
     error = null;
@@ -97,17 +98,30 @@
   async function updateQr() {
     if (!pair?.pairUrl) {
       pairQrSvg = "";
+      pairQrDataUrl = "";
       return;
     }
     try {
+      // Browser-safe path: render a PNG data URL.
+      // Some environments/bundlers have trouble with the SVG string path.
+      pairQrDataUrl = await QRCode.toDataURL(pair.pairUrl, {
+        margin: 1,
+        width: 260,
+        errorCorrectionLevel: "M",
+      });
+
+      // Also try SVG for crisp scaling; if this fails we still have the PNG.
       pairQrSvg = await QRCode.toString(pair.pairUrl, {
         type: "svg",
         margin: 1,
         width: 260,
         errorCorrectionLevel: "M",
       });
-    } catch {
+    } catch (e) {
       pairQrSvg = "";
+      if (!pairQrDataUrl) {
+        error = e instanceof Error ? `QR generation failed: ${e.message}` : "QR generation failed";
+      }
     }
   }
 
@@ -217,8 +231,12 @@
             <div class="k">Link</div>
             <div class="v"><a href={pair.pairUrl}>{pair.pairUrl}</a></div>
           </div>
-          {#if pairQrSvg}
+          {#if pairQrDataUrl}
+            <div class="qr"><img alt="Pairing QR code" src={pairQrDataUrl} /></div>
+          {:else if pairQrSvg}
             <div class="qr">{@html pairQrSvg}</div>
+          {:else}
+            <p class="hint hint-error">QR did not render. Open the Link above on your iPhone.</p>
           {/if}
         {/if}
       </div>
@@ -262,6 +280,20 @@
     gap: var(--space-sm);
     flex-wrap: wrap;
     margin-top: var(--space-md);
+  }
+  .qr {
+    margin-top: var(--space-md);
+    display: flex;
+    justify-content: flex-start;
+  }
+  .qr img {
+    width: 260px;
+    height: 260px;
+    image-rendering: pixelated;
+    border: 1px solid var(--cli-border);
+    border-radius: var(--radius-sm);
+    background: #fff;
+    padding: 6px;
   }
   .danger {
     background: #5d1b1b;
