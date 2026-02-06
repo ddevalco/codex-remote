@@ -55,6 +55,24 @@ function okJson(body: unknown, init: ResponseInit = {}): Response {
   });
 }
 
+function contentTypeForPath(pathname: string): string | null {
+  const p = pathname.toLowerCase();
+  if (p.endsWith(".html")) return "text/html; charset=utf-8";
+  if (p.endsWith(".js") || p.endsWith(".mjs")) return "text/javascript; charset=utf-8";
+  if (p.endsWith(".css")) return "text/css; charset=utf-8";
+  if (p.endsWith(".json")) return "application/json; charset=utf-8";
+  if (p.endsWith(".svg")) return "image/svg+xml";
+  if (p.endsWith(".png")) return "image/png";
+  if (p.endsWith(".jpg") || p.endsWith(".jpeg")) return "image/jpeg";
+  if (p.endsWith(".webp")) return "image/webp";
+  if (p.endsWith(".ico")) return "image/x-icon";
+  if (p.endsWith(".txt")) return "text/plain; charset=utf-8";
+  if (p.endsWith(".woff2")) return "font/woff2";
+  if (p.endsWith(".woff")) return "font/woff";
+  if (p.endsWith(".ttf")) return "font/ttf";
+  return null;
+}
+
 function unauth(): Response {
   return new Response("Unauthorised", { status: 401 });
 }
@@ -503,7 +521,8 @@ const server = Bun.serve<{ role: Role }>( {
         const filePath = `${UI_DIST_DIR}${path}`;
         const file = Bun.file(filePath);
         if (await file.exists()) {
-          return new Response(file);
+          const ct = contentTypeForPath(path);
+          return new Response(file, ct ? { headers: { "content-type": ct } } : undefined);
         }
       } catch {
         // fall through
