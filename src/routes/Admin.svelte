@@ -24,6 +24,12 @@
       const headers: Record<string, string> = {};
       if (auth.token) headers.authorization = `Bearer ${auth.token}`;
       const res = await fetch("/admin/status", { headers });
+      if (res.status === 401) {
+        // If the server token changed (reinstall) but the browser still has an old token,
+        // force a sign-out so AuthGate shows the access-token prompt again.
+        await auth.signOut();
+        throw new Error("Unauthorized (token mismatch). Please sign in again with your Access Token.");
+      }
       if (!res.ok) throw new Error(`status ${res.status}`);
       status = (await res.json()) as Status;
     } catch (e) {
