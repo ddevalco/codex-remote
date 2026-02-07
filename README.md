@@ -36,7 +36,7 @@ This project started as a local-only fork of Zane (credit: https://github.com/z-
 ## Install (macOS)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ddevalco/codex-remote/main/scripts/install-local.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ddevalco/codex-pocket/main/scripts/install-local.sh | bash
 ```
 
 After install:
@@ -56,7 +56,7 @@ What the installer does:
 If you want a clean slate (stop service, disable `tailscale serve`, remove launchd agent, delete `~/.codex-pocket`):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ddevalco/codex-remote/main/scripts/reset-and-install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ddevalco/codex-pocket/main/scripts/reset-and-install.sh | bash
 ```
 
 If you only want to wipe without reinstalling, run the local script after install:

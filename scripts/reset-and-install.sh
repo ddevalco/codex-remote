@@ -37,7 +37,7 @@ step "Removing Codex Pocket state (~/.codex-pocket)"
 rm -rf "$HOME/.codex-pocket"
 
 step "Reinstalling (one-line installer)"
-curl -fsSL https://raw.githubusercontent.com/ddevalco/codex-remote/main/scripts/install-local.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ddevalco/codex-pocket/main/scripts/install-local.sh | bash
 
 echo ""
 echo "Done."

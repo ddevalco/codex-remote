@@ -26,6 +26,7 @@ Commands:
   logs [anchor]          Tail logs (default: anchor)
   pair                   Create a one-time pairing link (prints URL)
   open-admin             Open the local Admin page in your browser
+  update                 Update the installed app (git pull, rebuild, restart)
 
 Environment:
   CODEX_POCKET_HOME       Defaults to ~/.codex-pocket
@@ -273,6 +274,65 @@ cmd_open_admin() {
   echo "$url"
 }
 
+
+cmd_update() {
+  read_config
+  need_cmd git
+
+  local bun_bin
+  bun_bin="$(resolve_bun || true)"
+  if [[ -z "${bun_bin:-}" ]]; then
+    echo "bun is required to update." >&2
+    exit 1
+  fi
+
+  local repo_dir="$APP_DIR/app"
+  if [[ ! -d "$repo_dir/.git" ]]; then
+    echo "Install not found at $repo_dir (missing .git)." >&2
+    echo "Re-run the installer to set up the app." >&2
+    exit 1
+  fi
+
+  local old
+  old="$(git -C "$repo_dir" rev-parse --short HEAD 2>/dev/null || true)"
+
+  # Stop first to avoid file locks and port conflicts.
+  cmd_stop >/dev/null 2>&1 || true
+
+  # Refuse to update if the repo has local modifications.
+  if ! git -C "$repo_dir" diff --quiet 2>/dev/null; then
+    echo "Local changes detected in $repo_dir; refusing to update." >&2
+    echo "Commit/stash your changes or reinstall cleanly." >&2
+    exit 1
+  fi
+  if ! git -C "$repo_dir" diff --cached --quiet 2>/dev/null; then
+    echo "Staged changes detected in $repo_dir; refusing to update." >&2
+    echo "Commit/stash your changes or reinstall cleanly." >&2
+    exit 1
+  fi
+
+  echo "Updating Codex Pocket in $repo_dir"
+  git -C "$repo_dir" fetch --prune origin >/dev/null
+  git -C "$repo_dir" pull --ff-only origin main
+
+  local new
+  new="$(git -C "$repo_dir" rev-parse --short HEAD 2>/dev/null || true)"
+
+  echo "Building UI"
+  (cd "$repo_dir" && "$bun_bin" install)
+  (cd "$repo_dir" && "$bun_bin" run build)
+
+  # Self-update the CLI if possible.
+  if [[ -f "$repo_dir/bin/codex-pocket" ]]; then
+    mkdir -p "$APP_DIR/bin" >/dev/null 2>&1 || true
+    cp "$repo_dir/bin/codex-pocket" "$APP_DIR/bin/codex-pocket" >/dev/null 2>&1 || true
+    chmod +x "$APP_DIR/bin/codex-pocket" >/dev/null 2>&1 || true
+  fi
+
+  cmd_start
+  echo "Updated ${old:-?} -> ${new:-?}"
+}
+
 main() {
   local cmd="${1:-}"
   case "$cmd" in
@@ -284,6 +344,7 @@ main() {
     logs) shift; cmd_logs "$@";;
     pair) shift; cmd_pair "$@";;
     open-admin) shift; cmd_open_admin "$@";;
+    update) shift; cmd_update "$@";;
     -h|--help|help|"") usage;;
     *) echo "Unknown command: $cmd" >&2; usage; exit 1;;
   esac

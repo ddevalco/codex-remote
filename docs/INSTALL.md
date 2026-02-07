@@ -3,7 +3,7 @@
 ## One-line install (macOS)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ddevalco/codex-remote/main/scripts/install-local.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ddevalco/codex-pocket/main/scripts/install-local.sh | bash
 ```
 
 The installer:

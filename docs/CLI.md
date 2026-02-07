@@ -22,6 +22,9 @@ The `codex-pocket` CLI manages the service and calls the admin API.
 - `codex-pocket pair`
   - Prints a one-time pairing URL (same as clicking "New pairing code" in `/admin`).
 
+- `codex-pocket update`
+  - Updates the installed app in `~/.codex-pocket/app` (git pull), rebuilds the UI, then restarts the service.
+
 ## Config
 
 The CLI reads:

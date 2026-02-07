@@ -7,7 +7,7 @@ set -euo pipefail
 # - Creates a launchd agent to run the local server on login
 
 APP_DIR="${CODEX_POCKET_HOME:-$HOME/.codex-pocket}"
-REPO_URL="${CODEX_POCKET_REPO:-https://github.com/ddevalco/codex-remote.git}"
+REPO_URL="${CODEX_POCKET_REPO:-https://github.com/ddevalco/codex-pocket.git}"
 BRANCH="${ZANE_LOCAL_BRANCH:-main}"
 
 bold=$'\033[1m'

@@ -82,7 +82,7 @@
   </section>
 
   <footer class="landing-footer">
-    <a class="footer-link" href="https://github.com/ddevalco/codex-remote" target="_blank" rel="noopener">GitHub</a>
+    <a class="footer-link" href="https://github.com/ddevalco/codex-pocket" target="_blank" rel="noopener">GitHub</a>
   </footer>
 
   {#if showAuthModal}
