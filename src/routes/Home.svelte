@@ -1,6 +1,7 @@
 <script lang="ts">
   import { socket } from "../lib/socket.svelte";
   import { threads } from "../lib/threads.svelte";
+  import { messages } from "../lib/messages.svelte";
   import { models } from "../lib/models.svelte";
   import { theme } from "../lib/theme.svelte";
   import { auth } from "../lib/auth.svelte";
@@ -94,7 +95,20 @@
     });
   }
 
-  const visibleThreads = $derived(threads.list);
+  const visibleThreads = $derived.by(() => {
+    const list = threads.list || [];
+    // Sort by most recently active (observed), then createdAt as a fallback.
+    return [...list].sort((a, b) => {
+      const aAct = messages.getLastActivity(a.id) ?? a.createdAt ?? 0;
+      const bAct = messages.getLastActivity(b.id) ?? b.createdAt ?? 0;
+      return bAct - aAct;
+    });
+  });
+
+  function threadTime(ts?: number, id?: string) {
+    const activity = id ? messages.getLastActivity(id) : null;
+    return activity ?? ts;
+  }
 
   $effect(() => {
     if (socket.status === "connected") {
@@ -176,8 +190,11 @@
               <a class="thread-link row" href="/thread/{thread.id}">
                 <span class="thread-icon">›</span>
                 <span class="thread-preview">{thread.title || thread.name || thread.preview || "New thread"}</span>
-                <span class="thread-meta">{formatTime(thread.createdAt)}</span>
+                <span class="thread-meta">{formatTime(threadTime(thread.createdAt, thread.id))}</span>
               </a>
+              {#if (messages.getTurnStatus(thread.id) ?? "").toLowerCase() === "inprogress"}
+                <span class="thread-active" title="Working">●</span>
+              {/if}
               <button class="rename-btn" onclick={() => renameThread(thread)} title="Rename thread">✎</button>
               <button
                 class="archive-btn"
@@ -535,6 +552,14 @@
     flex-shrink: 0;
     font-size: var(--text-xs);
     color: var(--cli-text-muted);
+  }
+
+  .thread-active {
+    flex-shrink: 0;
+    padding: 0 var(--space-sm);
+    color: var(--cli-success);
+    font-size: var(--text-xs);
+    line-height: 1;
   }
 
   .archive-btn {

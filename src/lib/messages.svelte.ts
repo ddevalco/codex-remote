@@ -25,6 +25,9 @@ class MessagesStore {
   #turnCompleteCallbacks = new Map<string, TurnCompleteCallback>();
   #pendingAgentMessageIds = new Map<string, string>();
 
+  // Last observed activity time (unix seconds) per thread. Used for sorting thread list.
+  #lastActivityByThread = $state<Map<string, number>>(new Map());
+
   // Streaming reasoning state (per-thread)
   #streamingReasoningTextByThread = $state<Map<string, string>>(new Map());
   #isReasoningStreamingByThread = $state<Map<string, boolean>>(new Map());
@@ -84,6 +87,19 @@ class MessagesStore {
   }
   getStreamingReasoningText(threadId: string): string {
     return this.#streamingReasoningTextByThread.get(threadId) ?? "";
+  }
+
+  getLastActivity(threadId: string): number | null {
+    return this.#lastActivityByThread.get(threadId) ?? null;
+  }
+
+  #touch(threadId: string) {
+    // Use seconds to align with thread.createdAt format in thread/list.
+    const now = Math.floor(Date.now() / 1000);
+    const prev = this.#lastActivityByThread.get(threadId) ?? 0;
+    if (now !== prev) {
+      this.#lastActivityByThread = new Map(this.#lastActivityByThread).set(threadId, now);
+    }
   }
 
   interrupt(threadId: string): { success: boolean; error?: string } {
@@ -458,6 +474,7 @@ class MessagesStore {
         null;
 
       if (threadId && Array.isArray(turns)) {
+        this.#touch(threadId);
         if (!this.#loadedThreads.has(threadId)) {
           this.#loadedThreads.add(threadId);
           this.#loadThread(threadId, turns);
@@ -472,6 +489,9 @@ class MessagesStore {
 
     const threadId = this.#extractThreadId(params);
     if (!threadId) return;
+
+    // Any event on this thread counts as "activity" for ordering.
+    this.#touch(threadId);
 
     // Item started - handle user messages
     if (method === "item/started") {
