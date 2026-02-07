@@ -8,7 +8,7 @@
     server: { host: string; port: number };
     uiDistDir: string;
     anchor: { running: boolean; cwd: string; host: string; port: number; log: string };
-    db: { path: string; retentionDays: number };
+    db: { path: string; retentionDays: number; uploadDir?: string; uploadRetentionDays?: number };
   };
 
   let status = $state<Status | null>(null);
@@ -348,6 +348,12 @@
 
             <div class="k">DB</div>
             <div class="v"><code>{status.db.path}</code> (retention {status.db.retentionDays}d)</div>
+
+            <div class="k">Uploads</div>
+            <div class="v">{status.db.uploadDir ? `dir: ${status.db.uploadDir}` : "(not configured)"}</div>
+
+            <div class="k">Upload retention</div>
+            <div class="v">{(status.db.uploadRetentionDays ?? uploadRetentionDays)} day(s) ({(status.db.uploadRetentionDays ?? uploadRetentionDays) === 0 ? "keep forever" : "auto-clean"})</div>
           </div>
 
         <div class="row buttons">
@@ -402,11 +408,12 @@
 
     <div class="section stack">
       <div class="section-header">
-        <span class="section-title">Debug</span>
+        <span class="section-title">Uploads</span>
       </div>
       <div class="section-body stack">
-        <p class="hint">Last 50 stored events (redacted). Useful for diagnosing blank threads or protocol mismatches.</p>
-        <div class="field stack" style="margin-top: var(--space-sm);">
+        <p class="hint">Uploads are stored locally on your Mac. Default retention is permanent.</p>
+
+        <div class="field stack">
           <label for="upload-retention">upload retention (days)</label>
           <input
             id="upload-retention"
@@ -415,15 +422,32 @@
             max="3650"
             bind:value={uploadRetentionDays}
           />
-          <p class="hint">0 = keep uploads forever. Cleanup runs periodically on the Mac.</p>
-          <button type="button" onclick={saveUploadRetention} disabled={!auth.token || savingUploadRetention}>
-            {savingUploadRetention ? "Saving..." : "Save upload retention"}
-          </button>
+          <p class="hint">0 = keep uploads forever. Cleanup runs periodically on the Mac (and you can run it manually).</p>
+          <div class="row buttons">
+            <button type="button" onclick={saveUploadRetention} disabled={!auth.token || savingUploadRetention}>
+              {savingUploadRetention ? "Saving..." : "Save"}
+            </button>
+            <button type="button" onclick={pruneUploadsNow} disabled={!auth.token || pruningUploads}>
+              {pruningUploads ? "Pruning..." : "Run cleanup now"}
+            </button>
+          </div>
         </div>
 
+        <p class="hint">Ops log (server maintenance + installer actions).</p>
+        <div class="row buttons">
+        </div>
+        <pre class="logs">{opsLog || "(no ops logs yet)"}</pre>
+      </div>
+    </div>
+
+<div class="section stack">
+      <div class="section-header">
+        <span class="section-title">Debug</span>
+      </div>
+      <div class="section-body stack">
+        <p class="hint">Last 50 stored events (redacted). Useful for diagnosing blank threads or protocol mismatches.</p>
         <div class="row buttons">
           <button type="button" onclick={loadDebugEvents} disabled={busy}>Refresh events</button>
-          <button type="button" onclick={loadOpsLog} disabled={busy}>Refresh ops log</button>
           <button type="button" onclick={pruneUploadsNow} disabled={!auth.token || pruningUploads}>
             {pruningUploads ? "Pruning..." : "Run upload cleanup"}
           </button>
@@ -436,8 +460,6 @@
           <p><code>{rotatedToken}</code></p>
         {/if}
         <pre class="logs">{debugEvents || "(no events yet)"}</pre>
-        <p class="hint" style="margin-top: var(--space-md);">Ops log (server maintenance + installer actions).</p>
-        <pre class="logs">{opsLog || "(no ops logs yet)"}</pre>
       </div>
     </div>
   </div>

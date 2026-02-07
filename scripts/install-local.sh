@@ -398,6 +398,37 @@ cat > "$PLIST" <<PLISTXML
 </plist>
 PLISTXML
 
+is_our_pid() {
+  local pid="$1"
+  local args
+  args="$(ps -p "$pid" -o args= 2>/dev/null || true)"
+  [[ -z "${args:-}" ]] && return 1
+  echo "$args" | grep -Fq "$APP_DIR/app/services/local-orbit/src/index.ts" && return 0
+  echo "$args" | grep -Fq "$APP_DIR/app/services/anchor/src/index.ts" && return 0
+  return 1
+}
+
+kill_owned_listeners() {
+  # Kill any stale Codex Pocket processes holding our ports.
+  # This intentionally does NOT kill unrelated services.
+  if ! command -v lsof >/dev/null 2>&1; then
+    return 0
+  fi
+
+  for p in "$LOCAL_PORT" "$ANCHOR_PORT"; do
+    lpids="$(lsof -nP -t -iTCP:"$p" -sTCP:LISTEN 2>/dev/null || true)"
+    [[ -z "${lpids:-}" ]] && continue
+
+    for pid in $lpids; do
+      if is_our_pid "$pid"; then
+        kill "$pid" >/dev/null 2>&1 || true
+      fi
+    done
+  done
+
+  sleep 0.1
+}
+
 step "Stopping any existing Codex Pocket service"
 # Try to stop a prior install cleanly to avoid EADDRINUSE on port 8790.
 launchctl unload "$PLIST" >/dev/null 2>&1 || true
@@ -412,16 +443,8 @@ fi
 pkill -f "$APP_DIR/app/services/local-orbit/src/index.ts" >/dev/null 2>&1 || true
 pkill -f "$APP_DIR/app/services/anchor/src/index.ts" >/dev/null 2>&1 || true
 
-# Final safety net: kill anything still listening on our ports.
-if command -v lsof >/dev/null 2>&1; then
-  for p in "$LOCAL_PORT" "$ANCHOR_PORT"; do
-    lpids="$(lsof -nP -t -iTCP:"$p" -sTCP:LISTEN 2>/dev/null || true)"
-    if [[ -n "${lpids:-}" ]]; then
-      # shellcheck disable=SC2086
-      kill $lpids >/dev/null 2>&1 || true
-    fi
-  done
-fi
+# Final safety net: kill stale Codex Pocket listeners on our ports (but never unrelated processes).
+kill_owned_listeners
 
 find_free_port() {
   local start="$1"
@@ -453,38 +476,19 @@ if command -v lsof >/dev/null 2>&1; then
 
     # If it looks like a previous codex-pocket/local-orbit Bun process, we can kill it safely.
     if ps -p "$listener_pid" -o args= 2>/dev/null | grep -q "$APP_DIR/app/services/local-orbit/src/index.ts"; then
-      if confirm "It looks like an old Codex Pocket server. Kill it and continue?"; then
-        kill "$listener_pid" >/dev/null 2>&1 || true
-        sleep 0.3
-      else
-        if confirm "Use a different port automatically instead?"; then
-          new_port="$(find_free_port 8791 8899 || true)"
-          [[ -n "${new_port:-}" ]] || abort "No free port found in 8791-8899."
-          LOCAL_PORT="$new_port"
-          echo "Using port ${LOCAL_PORT}." >&2
-        else
-          echo "Aborting install. Re-run after stopping the process, or set ZANE_LOCAL_PORT to use a different port." >&2
-          exit 1
-        fi
-      fi
+      echo "Detected an old Codex Pocket server on port ${LOCAL_PORT}. Stopping it..." >&2
+      kill "$listener_pid" >/dev/null 2>&1 || true
+      sleep 0.3
     else
-      echo "This does not look like Codex Pocket (or it could not be verified)." >&2
-      echo "Options:" >&2
-      echo "  1) Stop that process and re-run this installer." >&2
-      echo "  2) Re-run with a different port, e.g.: ZANE_LOCAL_PORT=8791" >&2
-      if confirm "Kill PID $listener_pid anyway and continue?"; then
-        kill "$listener_pid" >/dev/null 2>&1 || true
-        sleep 0.3
+      echo "Port ${LOCAL_PORT} is in use by another process." >&2
+      if confirm "Use a different port automatically instead?"; then
+        new_port="$(find_free_port 8791 8899 || true)"
+        [[ -n "${new_port:-}" ]] || abort "No free port found in 8791-8899."
+        LOCAL_PORT="$new_port"
+        echo "Using port ${LOCAL_PORT}." >&2
       else
-        if confirm "Use a different port automatically instead?"; then
-          new_port="$(find_free_port 8791 8899 || true)"
-          [[ -n "${new_port:-}" ]] || abort "No free port found in 8791-8899."
-          LOCAL_PORT="$new_port"
-          echo "Using port ${LOCAL_PORT}." >&2
-        else
-          echo "Aborting install. Re-run after stopping the process, or set ZANE_LOCAL_PORT to use a different port." >&2
-          exit 1
-        fi
+        echo "Aborting install. Re-run after stopping the process, or set ZANE_LOCAL_PORT to use a different port." >&2
+        exit 1
       fi
     fi
 
@@ -495,6 +499,84 @@ if command -v lsof >/dev/null 2>&1; then
     fi
   fi
 fi
+
+# Re-write config + launchd agent in case we had to switch ports due to conflicts.
+cat > "$CONFIG_JSON" <<JSON
+{
+  "token": "${ZANE_LOCAL_TOKEN}",
+  "host": "127.0.0.1",
+  "port": ${LOCAL_PORT},
+  "db": "${DB_PATH}",
+  "publicOrigin": "${PUBLIC_ORIGIN}",
+  "retentionDays": 14,
+  "uiDist": "${APP_DIR}/app/dist",
+  "uploadDir": "${APP_DIR}/uploads",
+  "uploadRetentionDays": 0,
+  "anchor": {
+    "cwd": "${APP_DIR}/app/services/anchor",
+    "host": "127.0.0.1",
+    "port": ${ANCHOR_PORT},
+    "log": "${ANCHOR_LOG}"
+  }
+}
+JSON
+chmod 600 "$CONFIG_JSON" || true
+
+cat > "$PLIST" <<PLISTXML
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.codex.pocket</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>${BUN_BIN}</string>
+    <string>run</string>
+    <string>${APP_DIR}/app/services/local-orbit/src/index.ts</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>${APP_DIR}/app</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>ZANE_LOCAL_TOKEN</key>
+    <string>${ZANE_LOCAL_TOKEN}</string>
+    <key>ZANE_LOCAL_CONFIG_JSON</key>
+    <string>${CONFIG_JSON}</string>
+    <key>ZANE_LOCAL_HOST</key>
+    <string>127.0.0.1</string>
+    <key>ZANE_LOCAL_PORT</key>
+    <string>${LOCAL_PORT}</string>
+    <key>ZANE_LOCAL_DB</key>
+    <string>${DB_PATH}</string>
+    <key>ZANE_LOCAL_PUBLIC_ORIGIN</key>
+    <string>${PUBLIC_ORIGIN}</string>
+    <key>ZANE_LOCAL_RETENTION_DAYS</key>
+    <string>14</string>
+    <key>ZANE_LOCAL_UI_DIST_DIR</key>
+    <string>${APP_DIR}/app/dist</string>
+    <key>ZANE_LOCAL_ANCHOR_CWD</key>
+    <string>${APP_DIR}/app/services/anchor</string>
+    <key>ZANE_LOCAL_ANCHOR_LOG</key>
+    <string>${ANCHOR_LOG}</string>
+    <key>ANCHOR_HOST</key>
+    <string>127.0.0.1</string>
+    <key>ANCHOR_PORT</key>
+    <string>${ANCHOR_PORT}</string>
+    <key>ZANE_LOCAL_AUTOSTART_ANCHOR</key>
+    <string>1</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>${APP_DIR}/server.log</string>
+  <key>StandardErrorPath</key>
+  <string>${APP_DIR}/server.log</string>
+</dict>
+</plist>
+PLISTXML
 
 launchctl unload "$PLIST" >/dev/null 2>&1 || true
 load_out="$(launchctl load "$PLIST" 2>&1)" || true
