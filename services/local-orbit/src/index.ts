@@ -746,18 +746,19 @@ const server = Bun.serve<{ role: Role }>({
 	    }
 
 	    // Uploads (token required)
-	    if (url.pathname === "/uploads/new" && req.method === "POST") {
-	      if (!authorised(req)) return unauth();
-	      const body = (await req.json().catch(() => null)) as null | {
-	        filename?: string;
-	        mime?: string;
-	        bytes?: number;
-	      };
-	      const mime = (body?.mime ?? "").trim() || "application/octet-stream";
-	      const bytes = Number(body?.bytes ?? 0);
-	      if (!Number.isFinite(bytes) || bytes <= 0) {
-	        return okJson({ error: "bytes is required" }, { status: 400 });
-	      }
+		    if (url.pathname === "/uploads/new" && req.method === "POST") {
+		      if (!authorised(req)) return unauth();
+		      const body = (await req.json().catch(() => null)) as null | {
+		        filename?: string;
+		        mime?: string;
+		        bytes?: number;
+		      };
+		      const originalFilename = (body?.filename ?? "").trim();
+		      const mime = (body?.mime ?? "").trim() || "application/octet-stream";
+		      const bytes = Number(body?.bytes ?? 0);
+		      if (!Number.isFinite(bytes) || bytes <= 0) {
+		        return okJson({ error: "bytes is required" }, { status: 400 });
+		      }
 	      if (bytes > UPLOAD_MAX_BYTES) {
 	        return okJson({
 	          error: `file too large (max ${UPLOAD_MAX_BYTES} bytes)`,
@@ -781,14 +782,19 @@ const server = Bun.serve<{ role: Role }>({
 	        return okJson({ error: "failed to create upload token" }, { status: 500 });
 	      }
 
-	      const origin = requestOrigin(url, req);
-	      return okJson({
-	        token,
-	        uploadUrl: `${origin}/uploads/${encodeURIComponent(token)}`,
-	        viewUrl: `${origin}/u/${encodeURIComponent(token)}`,
-	        expiresAt: expiresAt * 1000,
-	      });
-	    }
+		      const origin = requestOrigin(url, req);
+		      return okJson({
+		        token,
+		        uploadUrl: `${origin}/uploads/${encodeURIComponent(token)}`,
+		        viewUrl: `${origin}/u/${encodeURIComponent(token)}`,
+		        // This is the local absolute path on the Mac. It's only returned to authorised clients.
+		        // Used to pass image pixels to Codex app-server as a file attachment.
+		        localPath: filePath,
+		        filename: originalFilename || fileName,
+		        mime,
+		        expiresAt: expiresAt * 1000,
+		      });
+		    }
 
 	    if (url.pathname.startsWith("/uploads/") && req.method === "PUT") {
 	      if (!authorised(req)) return unauth();

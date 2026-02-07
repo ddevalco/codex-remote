@@ -94,14 +94,30 @@
 
     let sendError = $state<string | null>(null);
 
-    function handleSubmit(inputText: string) {
+    type ImageAttachment = {
+        kind: "image";
+        filename: string;
+        mime: string;
+        localPath: string;
+        viewUrl: string;
+    };
+
+    function handleSubmit(inputText: string, attachments: ImageAttachment[] = []) {
         if (!inputText || !threadId) return;
 
         sendError = null;
 
+        const input: Array<Record<string, unknown>> = [{ type: "text", text: inputText }];
+        for (const a of attachments) {
+            if (a.kind !== "image" || !a.localPath) continue;
+            // Codex app-server supports image inputs when provided as a file path on disk.
+            // We pass both path + view URL; unknown fields should be ignored by older versions.
+            input.push({ type: "image", path: a.localPath, url: a.viewUrl, mime: a.mime, filename: a.filename });
+        }
+
         const params: Record<string, unknown> = {
             threadId,
-            input: [{ type: "text", text: inputText }],
+            input,
         };
 
         if (model.trim()) {

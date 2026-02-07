@@ -2,7 +2,7 @@
   import type { ModeKind, ModelOption, ReasoningEffort } from "../types";
   import { api } from "../api";
 
-  interface Props {
+	  interface Props {
     model: string;
     reasoningEffort: ReasoningEffort;
     mode?: ModeKind;
@@ -10,11 +10,19 @@
     modelsLoading?: boolean;
     disabled?: boolean;
     onStop?: () => void;
-    onSubmit: (input: string) => void;
-    onModelChange: (model: string) => void;
-    onReasoningChange: (effort: ReasoningEffort) => void;
-    onModeChange?: (mode: ModeKind) => void;
-  }
+	    onSubmit: (input: string, attachments?: ImageAttachment[]) => void;
+	    onModelChange: (model: string) => void;
+	    onReasoningChange: (effort: ReasoningEffort) => void;
+	    onModeChange?: (mode: ModeKind) => void;
+	  }
+
+	  type ImageAttachment = {
+	    kind: "image";
+	    filename: string;
+	    mime: string;
+	    localPath: string;
+	    viewUrl: string;
+	  };
 
   const {
     model,
@@ -50,8 +58,9 @@
   });
 
   const canSubmit = $derived(input.trim().length > 0 && !disabled);
-  let uploadBusy = $state(false);
-  let uploadError = $state<string | null>(null);
+	  let uploadBusy = $state(false);
+	  let uploadError = $state<string | null>(null);
+	  let pendingAttachments = $state<ImageAttachment[]>([]);
 
   const reasoningOptions: { value: ReasoningEffort; label: string }[] = [
     { value: "low", label: "Low" },
@@ -67,12 +76,13 @@
     reasoningOptions.find((r) => r.value === reasoningEffort)?.label || "Medium"
   );
 
-  function handleSubmit(e: Event) {
-    e.preventDefault();
-    if (!canSubmit) return;
-    onSubmit(input.trim());
-    input = "";
-  }
+	  function handleSubmit(e: Event) {
+	    e.preventDefault();
+	    if (!canSubmit) return;
+	    onSubmit(input.trim(), pendingAttachments);
+	    input = "";
+	    pendingAttachments = [];
+	  }
 
   function handleKeydown(e: KeyboardEvent) {
     if (e.key !== "Enter") return;
@@ -102,20 +112,27 @@
     }
   }
 
-  async function handlePickImage(e: Event) {
+	  async function handlePickImage(e: Event) {
     const el = e.target as HTMLInputElement;
     const file = el.files?.[0];
     el.value = "";
     if (!file) return;
 
-    uploadError = null;
-    uploadBusy = true;
-    try {
-      const meta = await api.post<{ token: string; uploadUrl: string; viewUrl: string }>("/uploads/new", {
-        filename: file.name,
-        mime: file.type || "application/octet-stream",
-        bytes: file.size,
-      });
+	    uploadError = null;
+	    uploadBusy = true;
+	    try {
+	      const meta = await api.post<{
+	        token: string;
+	        uploadUrl: string;
+	        viewUrl: string;
+	        localPath: string;
+	        filename: string;
+	        mime: string;
+	      }>("/uploads/new", {
+	        filename: file.name,
+	        mime: file.type || "application/octet-stream",
+	        bytes: file.size,
+	      });
 
       const buf = await file.arrayBuffer();
       const putPath = `/uploads/${encodeURIComponent(meta.token)}`;
@@ -125,16 +142,28 @@
         throw new Error(t || `upload failed (${res.status})`);
       }
 
-      // Insert as markdown so it renders inline in the chat UI.
-      const alt = (file.name || "image").replace(/[\r\n\t\u0000]/g, " ").trim();
-      const md = `![${alt}](${meta.viewUrl})`;
-      input = `${input}${input ? "\n" : ""}${md}`;
-    } catch (err) {
-      uploadError = err instanceof Error ? err.message : "Upload failed";
-    } finally {
-      uploadBusy = false;
-    }
-  }
+	      // Insert as markdown so it renders inline in the chat UI.
+	      const alt = (file.name || "image").replace(/[\r\n\t\u0000]/g, " ").trim();
+	      const md = `![${alt}](${meta.viewUrl})`;
+	      input = `${input}${input ? "\n" : ""}${md}`;
+
+	      // Also keep a structured attachment so we can pass pixels to Codex app-server.
+	      pendingAttachments = [
+	        ...pendingAttachments,
+	        {
+	          kind: "image",
+	          filename: meta.filename || file.name || alt || "image",
+	          mime: meta.mime || file.type || "application/octet-stream",
+	          localPath: meta.localPath,
+	          viewUrl: meta.viewUrl,
+	        },
+	      ];
+	    } catch (err) {
+	      uploadError = err instanceof Error ? err.message : "Upload failed";
+	    } finally {
+	      uploadBusy = false;
+	    }
+	  }
 </script>
 
 <svelte:window onclick={handleClickOutside} />
