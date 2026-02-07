@@ -248,6 +248,20 @@ else
   git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$APP_DIR/app"
 fi
 
+# Print the installed commit for debugging/support.
+APP_COMMIT="$(git -C "$APP_DIR/app" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
+echo "App commit: $APP_COMMIT"
+
+# Sanity check: ensure we didn't accidentally install an old Anchor that binds a local port and requires AUTH_URL.
+if ! rg -q "canDeviceLogin" "$APP_DIR/app/services/anchor/src/index.ts" 2>/dev/null; then
+  echo "Error: installed Anchor source does not match expected version (missing canDeviceLogin)." >&2
+  echo "This usually means you installed from an outdated repo/branch, or the clone failed." >&2
+  echo "Repo:   $REPO_URL" >&2
+  echo "Branch: $BRANCH" >&2
+  echo "Commit: $APP_COMMIT" >&2
+  exit 1
+fi
+
 step "Installing dependencies"
 (cd "$APP_DIR/app" && "$BUN_BIN" install)
 (cd "$APP_DIR/app/services/anchor" && "$BUN_BIN" install)
