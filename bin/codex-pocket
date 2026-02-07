@@ -533,7 +533,8 @@ cmd_ensure() {
   local v
   # Don't hide parse failures: capture stdout only, but tolerate non-JSON bodies.
   v="$(curl_auth "$base/admin/validate" 2>/dev/null || true)"
-  if [[ -z "${v:-}" ]]; then
+  # Treat whitespace-only output as failure (e.g. curl returning nothing).
+  if [[ -z "${v//[[:space:]]/}" ]]; then
     echo "Validate failed (auth?). If /admin is asking for a token, run: codex-pocket token" >&2
     return 1
   fi
