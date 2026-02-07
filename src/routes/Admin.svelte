@@ -5,9 +5,10 @@
   import { auth } from "../lib/auth.svelte";
 
   type Status = {
-    daemon: { host: string; port: number };
-    stateDir: string;
-    anchor: { running: boolean; cwd: string; log: string };
+    server: { host: string; port: number };
+    uiDistDir: string;
+    anchor: { running: boolean; cwd: string; host: string; port: number; log: string };
+    db: { path: string; retentionDays: number };
   };
 
   let status = $state<Status | null>(null);
@@ -186,11 +187,11 @@
           <p class="hint">Loading...</p>
         {:else}
           <div class="kv">
-            <div class="k">Daemon</div>
-            <div class="v">{status.daemon.host}:{status.daemon.port}</div>
+            <div class="k">Server</div>
+            <div class="v">{status.server.host}:{status.server.port}</div>
 
-            <div class="k">State dir</div>
-            <div class="v"><code>{status.stateDir}</code></div>
+            <div class="k">UI dist</div>
+            <div class="v"><code>{status.uiDistDir}</code></div>
 
             <div class="k">Anchor</div>
             <div class="v">{status.anchor.running ? "running" : "stopped"}</div>
@@ -198,8 +199,14 @@
             <div class="k">Anchor cwd</div>
             <div class="v"><code>{status.anchor.cwd}</code></div>
 
+            <div class="k">Anchor addr</div>
+            <div class="v">{status.anchor.host}:{status.anchor.port}</div>
+
             <div class="k">Anchor log</div>
             <div class="v"><code>{status.anchor.log}</code></div>
+
+            <div class="k">DB</div>
+            <div class="v"><code>{status.db.path}</code> (retention {status.db.retentionDays}d)</div>
           </div>
 
         <div class="row buttons">
