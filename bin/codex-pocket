@@ -462,11 +462,7 @@ cmd_start() {
     exit 1
   fi
 
-  # Prefer launchd, but fall back to a PID-based background process if launchctl is blocked.
-  launchctl unload "$plist" >/dev/null 2>&1 || true
-  load_out="$(launchctl load "$plist" 2>&1)" || true
-  if echo "$load_out" | grep -qi "Load failed: 5"; then
-    echo "launchctl load failed (error 5). Starting in background instead (no auto-start on login)." >&2
+  start_bg() {
     rm -f "$PID_FILE" >/dev/null 2>&1 || true
     touch "$APP_DIR/server.log" >/dev/null 2>&1 || true
     local pub
@@ -504,6 +500,15 @@ cmd_start() {
       echo "Check logs: $APP_DIR/server.log" >&2
     fi
     return 0
+  }
+
+  # Prefer launchd, but fall back to a PID-based background process if launchctl is blocked.
+  launchctl unload "$plist" >/dev/null 2>&1 || true
+  load_out="$(launchctl load "$plist" 2>&1)" || true
+  if echo "$load_out" | grep -qi "Load failed: 5"; then
+    echo "launchctl load failed (error 5). Starting in background instead (no auto-start on login)." >&2
+    start_bg
+    return 0
   fi
 
   if [[ -n "$load_out" ]]; then
@@ -514,8 +519,9 @@ cmd_start() {
   base="$(base_url)"
   echo "Waiting for service to become healthy..."
   if ! wait_healthy "$base"; then
-    echo "Warning: service did not become healthy at $base/health" >&2
-    echo "Check logs: $APP_DIR/server.log" >&2
+    echo "launchd start did not become healthy; falling back to background start." >&2
+    launchctl unload "$plist" >/dev/null 2>&1 || true
+    start_bg
   fi
 }
 
