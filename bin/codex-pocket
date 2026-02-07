@@ -210,6 +210,23 @@ cmd_stop() {
 
   # Safety net: in environments where PID tracking fails (permissions/sandbox), kill by script path.
   pkill -f "$APP_DIR/app/services/local-orbit/src/index.ts" 2>/dev/null || true
+  pkill -f "$APP_DIR/app/services/anchor/src/index.ts" 2>/dev/null || true
+
+  # Final safety net: kill anything still listening on our configured ports.
+  if command -v lsof >/dev/null 2>&1; then
+    local aport
+    aport="$(anchor_port 2>/dev/null || echo 8788)"
+    for p in 8790 "$aport"; do
+      while true; do
+        local lpids
+        lpids="$(lsof -nP -t -iTCP:"$p" -sTCP:LISTEN 2>/dev/null || true)"
+        [[ -z "${lpids:-}" ]] && break
+        # shellcheck disable=SC2086
+        kill $lpids >/dev/null 2>&1 || true
+        sleep 0.1
+      done
+    done
+  fi
   echo "Stopped ($LABEL)"
 }
 
