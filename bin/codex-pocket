@@ -118,6 +118,88 @@ curl_auth() {
   curl -fsS -H "Authorization: Bearer $tok" "$url" "$@"
 }
 
+
+
+is_our_pid() {
+  local pid="$1"
+  local cmd
+  cmd="$(ps -p "$pid" -o command= 2>/dev/null || true)"
+  [[ -z "${cmd:-}" ]] && return 1
+
+  # Only consider processes started from our install dir.
+  if echo "$cmd" | grep -Fq "$APP_DIR/app/services/local-orbit/src/index.ts"; then
+    return 0
+  fi
+  if echo "$cmd" | grep -Fq "$APP_DIR/app/services/anchor/src/index.ts"; then
+    return 0
+  fi
+  return 1
+}
+
+kill_owned_listeners() {
+  # Kill existing Codex Pocket processes that are currently holding our ports.
+  # We intentionally do NOT kill unrelated processes.
+  if ! command -v lsof >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local aport
+  aport="$(anchor_port 2>/dev/null || echo 8788)"
+
+  for p in 8790 "$aport"; do
+    local lpids
+    lpids="$(lsof -nP -t -iTCP:"$p" -sTCP:LISTEN 2>/dev/null || true)"
+    [[ -z "${lpids:-}" ]] && continue
+
+    for pid in $lpids; do
+      if is_our_pid "$pid"; then
+        kill "$pid" >/dev/null 2>&1 || true
+      fi
+    done
+  done
+
+  # Give the OS a moment to release ports.
+  sleep 0.1
+}
+
+port_conflicts() {
+  # Return non-empty if our ports are in use by non-owned processes.
+  if ! command -v lsof >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local aport
+  aport="$(anchor_port 2>/dev/null || echo 8788)"
+
+  local out=""
+  for p in 8790 "$aport"; do
+    local lpids
+    lpids="$(lsof -nP -t -iTCP:"$p" -sTCP:LISTEN 2>/dev/null || true)"
+    [[ -z "${lpids:-}" ]] && continue
+
+    for pid in $lpids; do
+      if ! is_our_pid "$pid"; then
+        local cmd
+        cmd="$(ps -p "$pid" -o command= 2>/dev/null || true)"
+        out+="port $p is in use by pid $pid: $cmd"$'\n'
+      fi
+    done
+  done
+
+  echo "$out"
+}
+
+wait_healthy() {
+  local base="$1"
+  local i
+  for i in $(seq 1 40); do
+    if curl -fsS "$base/health" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 0.1
+  done
+  return 1
+}
 cmd_doctor() {
   echo "${bold}Dependencies${reset}"
   need_cmd git
@@ -186,6 +268,13 @@ cmd_start() {
       "$bun_bin" run "$APP_DIR/app/services/local-orbit/src/index.ts" >>"$APP_DIR/server.log" 2>&1 &
     echo $! >"$PID_FILE"
     echo "Started (background pid: $(cat "$PID_FILE"))"
+    local base
+    base="$(base_url)"
+    echo "Waiting for service to become healthy..."
+    if ! wait_healthy "$base"; then
+      echo "Warning: service did not become healthy at $base/health" >&2
+      echo "Check logs: $APP_DIR/server.log" >&2
+    fi
     return 0
   fi
 
@@ -193,6 +282,13 @@ cmd_start() {
     echo "$load_out" >&2
   fi
   echo "Started ($LABEL)"
+  local base
+  base="$(base_url)"
+  echo "Waiting for service to become healthy..."
+  if ! wait_healthy "$base"; then
+    echo "Warning: service did not become healthy at $base/health" >&2
+    echo "Check logs: $APP_DIR/server.log" >&2
+  fi
 }
 
 cmd_stop() {
