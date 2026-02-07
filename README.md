@@ -7,6 +7,20 @@ This project started as a local-only fork of Zane (credit: https://github.com/z-
 - No public internet exposure required
 - Local persistence via SQLite
 
+## How Codex Pocket Differs From Zane
+Codex Pocket is a focused fork for a single use case: **run Codex locally on macOS and access it securely from iPhone over Tailscale**.
+
+Key differences:
+- **No Cloudflare dependency**: Codex Pocket uses a single local server (`local-orbit`) with a shared-token auth model.
+- **Tailnet-first exposure**: binds to `127.0.0.1` and is designed to be exposed via `tailscale serve` to devices on your tailnet (no public internet required).
+- **Simplified auth + pairing**: one bearer **Access Token** + short-lived one-time pairing QR in `/admin`.
+- **Installer + lifecycle UX**: one-line installer, `launchd` integration (with background fallback), and a full `codex-pocket` CLI (`doctor/start/stop/restart/status/logs/pair/open-admin/update`).
+- **Local persistence**: SQLite-backed event log + replay endpoints powering the Review UI.
+- **iPhone-first usability**: default Enter = newline (send via Cmd/Ctrl+Enter), plus mobile-oriented UI fixes.
+- **Concurrency**: composing in thread B while thread A runs now works (per-thread progress tracking).
+- **Image uploads**: stored locally, served as capability URLs, configurable retention + cleanup from Admin.
+- **Vision attachments**: uploaded images are now forwarded to Codex app-server as structured attachments (so vision-capable models can consume pixels), while still rendering inline in the chat UI.
+
 ## What You Get
 - Web UI (mobile-friendly): create tasks, watch live output, approve/deny writes, review diffs
 - Image attachments: upload from iPhone, embed inline in threads
@@ -102,6 +116,7 @@ Note about the Codex desktop app:
 - Protocol: `docs/PROTOCOL.md`
 - Security hardening: `docs/HARDENING.md`
 - Troubleshooting: `docs/TROUBLESHOOTING.md`
+- Changelog: `CHANGELOG.md`
 
 ## Attribution
 See `docs/ATTRIBUTION.md`.

@@ -14,6 +14,7 @@ Responsibilities:
 - Relay JSON messages between web UI <-> Anchor.
 - Persist selected events to a local SQLite database for reconnect/review.
 - Provide admin APIs to inspect status, view logs, and manage the Anchor process.
+- Handle image uploads (`/uploads/*`) and serve images via capability URLs (`/u/*`).
 
 Local-orbit binds to `127.0.0.1` by default and is intended to be exposed to your iPhone using `tailscale serve`.
 
@@ -46,6 +47,14 @@ Responsibilities:
 ### Event persistence
 - local-orbit stores NDJSON event entries in SQLite.
 - The Review page fetches event history from `GET /threads/:id/events`.
+
+### Image uploads + vision attachments
+1. UI requests an upload slot: `POST /uploads/new` (authorised).
+2. UI uploads bytes: `PUT /uploads/:token` (authorised).
+3. local-orbit serves the image via capability URL: `GET /u/:token` (no auth; the token is the capability).
+4. When you send a message, the UI includes both:
+   - Markdown `![...](viewUrl)` so the timeline renders an inline image.
+   - A structured `input` item with a local file `path` so Codex app-server can pass pixels to vision-capable models.
 
 ## Pairing
 
