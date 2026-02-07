@@ -607,20 +607,12 @@ async function startup() {
 
   const needsLogin =
     Boolean(ORBIT_URL) &&
-    (FORCE_LOGIN || !ZANE_ANCHOR_JWT_SECRET || (canDeviceLogin && !USER_ID));
+    ((FORCE_LOGIN && canDeviceLogin) || !ZANE_ANCHOR_JWT_SECRET || (canDeviceLogin && !USER_ID));
 
 console.log(`\nCodex Pocket Anchor`);
   console.log(`  Local:     disabled (no local listen)`);
 
   if (needsLogin) {
-    if (!canDeviceLogin) {
-      console.error(
-        "[anchor] FORCE_LOGIN requested but AUTH_URL is empty; skipping device login and leaving Orbit disconnected"
-      );
-      console.log(`  Orbit:     not connected (login required)`);
-      console.log();
-      return;
-    }
     const ok = await deviceLogin();
     if (!ok) {
       console.log(`  Orbit:     not connected (login required)`);
