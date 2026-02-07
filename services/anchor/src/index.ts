@@ -101,6 +101,15 @@ function ensureAppServer(): void {
         }
       }
 
+      // Relay app-server output back to local-orbit (and thus to browsers).
+      if (orbitSocket && orbitSocket.readyState === WebSocket.OPEN) {
+        try {
+          orbitSocket.send(line);
+        } catch (err) {
+          console.warn("[anchor] failed to relay app-server output to orbit", err);
+        }
+      }
+
       for (const client of clients) {
         try {
           client.send(line);
