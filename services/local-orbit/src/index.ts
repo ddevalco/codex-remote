@@ -393,7 +393,7 @@ function relay(fromRole: Role, msgText: string): void {
   for (const ws of all.keys()) send(ws, msgText);
 }
 
-const server = Bun.serve<{ role: Role }>( {
+const server = Bun.serve<{ role: Role }>({
   hostname: HOST,
   port: PORT,
   async fetch(req, server) {
@@ -403,11 +403,17 @@ const server = Bun.serve<{ role: Role }>( {
     const method = isHead ? "GET" : req.method;
 
     if (method === "GET" && url.pathname === "/health") {
+      const distIndexPath = `${UI_DIST_DIR}/index.html`;
+      const distIndexExists = await Bun.file(distIndexPath).exists().catch(() => false);
       const res = okJson({
         status: "ok",
         host: HOST,
         port: PORT,
         hostname: hostname(),
+        ui: {
+          distDir: UI_DIST_DIR,
+          indexExists: distIndexExists,
+        },
         clients: clientSockets.size,
         anchors: anchorSockets.size,
         anchor: {
