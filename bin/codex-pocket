@@ -636,12 +636,12 @@ start_service() {
   if ! curl -fsS "$base/health" >/dev/null 2>&1; then
     # launchctl may fail; fallback to background. Provide config/token env so the
     # server doesn't start "unconfigured" (Access Token is required...).
-    tok="$(python3 - "$CONFIG_JSON" <<'PY'\nimport json,sys\nwith open(sys.argv[1]) as f:\n  d=json.load(f)\nprint(d.get('token',''))\nPY\n)"
-    host="$(python3 - "$CONFIG_JSON" <<'PY'\nimport json,sys\nwith open(sys.argv[1]) as f:\n  d=json.load(f)\nprint(d.get('host','127.0.0.1'))\nPY\n)"
-    port="$(python3 - "$CONFIG_JSON" <<'PY'\nimport json,sys\nwith open(sys.argv[1]) as f:\n  d=json.load(f)\nprint(int(d.get('port',8790)))\nPY\n)"
-    db="$(python3 - "$CONFIG_JSON" <<'PY'\nimport json,sys\nwith open(sys.argv[1]) as f:\n  d=json.load(f)\nprint(d.get('db',''))\nPY\n)"
-    retention="$(python3 - "$CONFIG_JSON" <<'PY'\nimport json,sys\nwith open(sys.argv[1]) as f:\n  d=json.load(f)\nprint(d.get('retentionDays',14))\nPY\n)"
-    pub="$(python3 - "$CONFIG_JSON" <<'PY'\nimport json,sys\nwith open(sys.argv[1]) as f:\n  d=json.load(f)\nprint(d.get('publicOrigin',''))\nPY\n)"
+    tok="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get(\"token\",\"\"))' "$CONFIG_JSON")"
+    host="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get(\"host\",\"127.0.0.1\"))' "$CONFIG_JSON")"
+    port="$(python3 -c 'import json,sys; print(int(json.load(open(sys.argv[1])).get(\"port\",8790)))' "$CONFIG_JSON")"
+    db="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get(\"db\",\"\"))' "$CONFIG_JSON")"
+    retention="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get(\"retentionDays\",14))' "$CONFIG_JSON")"
+    pub="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get(\"publicOrigin\",\"\"))' "$CONFIG_JSON")"
 
     nohup env \
       ZANE_LOCAL_TOKEN="$tok" \
