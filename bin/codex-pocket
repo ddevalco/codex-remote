@@ -184,6 +184,47 @@ curl_auth_soft_with_code() {
   printf '%s\n%s' "$code" "$body"
 }
 
+split_code_body() {
+  # Reads "<http_code>\n<body>" from stdin and sets CODE/BODY globals.
+  local first rest
+  IFS= read -r first || true
+  rest="$(cat || true)"
+  CODE="$(printf '%s' "$first" | tr -d '\r')"
+  BODY="$rest"
+}
+
+json_ok() {
+  # Exit 0 if stdin is valid JSON with {"ok": true}, else exit non-zero.
+  # Never prints a Python traceback (keeps CLI output user-friendly).
+  python3 - <<'PY'
+import json,sys
+raw=sys.stdin.read()
+try:
+  d=json.loads(raw)
+except Exception:
+  sys.exit(3)
+sys.exit(0 if d.get("ok") else 2)
+PY
+}
+
+json_compact_failures() {
+  # Prints failing checks (if present) from a validate JSON body, else nothing.
+  python3 - <<'PY'
+import json,sys
+raw=sys.stdin.read()
+try:
+  d=json.loads(raw)
+except Exception:
+  sys.exit(0)
+checks=d.get("checks") or []
+for c in checks:
+  if not c.get("ok"):
+    cid=c.get("id","?")
+    summ=c.get("summary","")
+    print(f"- {cid}: {summ}".rstrip())
+PY
+}
+
 
 
 is_our_pid() {
@@ -554,8 +595,13 @@ cmd_ensure() {
 
   echo "Validating..."
   local code body
-  code="$(curl_auth_soft_with_code "$base/admin/validate" 2>/dev/null | head -n 1 | tr -d '\r')"
-  body="$(curl_auth_soft_with_code "$base/admin/validate" 2>/dev/null | sed '1d')"
+  local resp
+  resp="$(curl_auth_soft_with_code "$base/admin/validate" 2>/dev/null || true)"
+  CODE=""
+  BODY=""
+  printf '%s' "$resp" | split_code_body
+  code="$CODE"
+  body="$BODY"
 
   if [[ "$code" == "401" ]]; then
     echo "Validate failed: 401 Unauthorised" >&2
@@ -572,38 +618,44 @@ cmd_ensure() {
     printf '%s\n' "${body:0:200}" >&2
     return 1
   fi
-  if ! printf '%s' "$body" | python3 - <<'PY'
-import json,sys
-d=json.loads(sys.stdin.read())
-sys.exit(0 if d.get("ok") else 2)
-PY
-  then
-    echo "Validate reported issues." >&2
-    printf '%s\n' "$body" | python3 -m json.tool 2>/dev/null || true
-    return 1
+  if printf '%s' "$body" | json_ok; then
+    echo "OK"
+    return 0
   fi
-  echo "OK"
 
-  echo "Repairing (safe actions)..."
+  echo "Validate reported issues:" >&2
+  printf '%s' "$body" | json_compact_failures >&2 || true
+
+  echo "Repairing (safe actions)..." >&2
   curl_auth "$base/admin/repair" -X POST -H 'content-type: application/json' -d '{"actions":["ensureUploadDir","startAnchor","pruneUploads","fixTailscaleServe"]}' >/dev/null 2>&1 || true
 
   echo "Re-validating..."
-  curl_auth_soft "$base/admin/validate" | python3 - <<'PY'
-import json,sys
-raw=sys.stdin.read()
-try:
-  d=json.loads(raw)
-except Exception:
-  print("Re-validate returned non-JSON. First 200 bytes:", file=sys.stderr)
-  print(raw[:200], file=sys.stderr)
-  raise
-ok=bool(d.get('ok'))
-print("OK" if ok else "NOT OK")
-if not ok:
-  for c in d.get('checks') or []:
-    if not c.get('ok'):
-      print(f"- {c.get('id')}: {c.get('summary')}")
-PY
+  resp="$(curl_auth_soft_with_code "$base/admin/validate" 2>/dev/null || true)"
+  CODE=""
+  BODY=""
+  printf '%s' "$resp" | split_code_body
+  code="$CODE"
+  body="$BODY"
+  if [[ "$code" == "401" ]]; then
+    echo "Re-validate failed: 401 Unauthorised" >&2
+    return 1
+  fi
+  if [[ -z "${body//[[:space:]]/}" ]]; then
+    echo "Re-validate failed: empty response (HTTP $code)" >&2
+    return 1
+  fi
+  if [[ "${body:0:1}" != "{" ]]; then
+    echo "Re-validate returned non-JSON (HTTP $code). First 200 bytes:" >&2
+    printf '%s\n' "${body:0:200}" >&2
+    return 1
+  fi
+  if printf '%s' "$body" | json_ok; then
+    echo "OK"
+    return 0
+  fi
+  echo "NOT OK" >&2
+  printf '%s\n' "$body" | python3 -m json.tool 2>/dev/null || true
+  return 1
 }
 
 cmd_smoke_test() {
@@ -628,8 +680,13 @@ cmd_smoke_test() {
 
   # 2) validate (requires token)
   local code body
-  code="$(curl_auth_soft_with_code "$base/admin/validate" 2>/dev/null | head -n 1 | tr -d '\r')"
-  body="$(curl_auth_soft_with_code "$base/admin/validate" 2>/dev/null | sed '1d')"
+  local resp
+  resp="$(curl_auth_soft_with_code "$base/admin/validate" 2>/dev/null || true)"
+  CODE=""
+  BODY=""
+  printf '%s' "$resp" | split_code_body
+  code="$CODE"
+  body="$BODY"
   if [[ "$code" == "401" ]]; then
     echo "FAIL: /admin/validate unauthorised (token mismatch?)" >&2
     echo "Run: codex-pocket token" >&2
@@ -644,12 +701,7 @@ cmd_smoke_test() {
     printf '%s\n' "${body:0:200}" >&2
     return 1
   fi
-  if ! printf '%s' "$body" | python3 - <<'PY'
-import json,sys
-d=json.loads(sys.stdin.read())
-sys.exit(0 if d.get("ok") else 2)
-PY
-  then
+  if ! printf '%s' "$body" | json_ok; then
     echo "FAIL: /admin/validate reported issues" >&2
     printf '%s\n' "$body" | python3 -m json.tool 2>/dev/null || true
     echo "Try: codex-pocket ensure" >&2
@@ -677,13 +729,15 @@ cmd_summary() {
   echo "Config:          $CONFIG_JSON"
   echo "Local URL:       $base"
   echo "Admin URL:       $base/admin"
-  echo "Tailnet URL:     $(tailnet_url 2>/dev/null || true)"
-  echo "Tailnet Admin:   $(tailnet_url 2>/dev/null || true)/admin"
+  local pub
+  pub="$(public_origin)"
+  echo "Tailnet URL:     ${pub:-}"
+  echo "Tailnet Admin:   ${pub:+$pub/admin}"
   echo "Access Token:    $(cmd_token | head -c 8)..."
   echo "Logs:            $APP_DIR/server.log"
   echo "Anchor logs:     $APP_DIR/anchor.log"
   echo "Uploads:         $APP_DIR/uploads"
-  echo "DB:              $(config_db)"
+  echo "DB:              $(db_path)"
 }
 
 cmd_restart() {
@@ -818,12 +872,12 @@ SH
 
   echo ""
   echo "Running ensure..."
-  cmd_ensure || true
+  cmd_ensure
   echo ""
   cmd_summary || true
   echo ""
   echo "Running smoke-test..."
-  cmd_smoke_test || true
+  cmd_smoke_test
 }
 
 main() {
