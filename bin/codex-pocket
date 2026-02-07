@@ -23,6 +23,7 @@ Commands:
   stop                   Stop the launchd service
   restart                Restart the service
   ensure                 Validate and attempt safe auto-repair
+  smoke-test             Run a fast PASS/FAIL check against the local service
   status                 Show admin status JSON
   logs [anchor]          Tail logs (default: anchor)
   pair                   Create a one-time pairing link (prints URL)
@@ -30,7 +31,7 @@ Commands:
   urls                   Print local/admin/tailnet URLs (from config)
   diagnose               Run a diagnostic report for troubleshooting
   open-admin             Open the local Admin page in your browser
-  update                 Update the installed app (git pull, rebuild, restart)
+  update                 Update the installed app (git pull, rebuild, restart, ensure)
 
 Environment:
   CODEX_POCKET_HOME       Defaults to ~/.codex-pocket
@@ -573,6 +574,53 @@ if not ok:
 PY
 }
 
+cmd_smoke_test() {
+  read_config
+  local base
+  base="$(base_url)"
+
+  echo "Codex Pocket smoke test"
+  echo "Base URL: $base"
+
+  # 1) health
+  if ! curl -fsS "$base/health" >/dev/null 2>&1; then
+    echo "FAIL: /health unreachable" >&2
+    echo "Try: codex-pocket restart" >&2
+    return 1
+  fi
+  echo "PASS: /health"
+
+  # 2) validate (requires token)
+  local v
+  v="$(curl_auth "$base/admin/validate" 2>/dev/null || true)"
+  if [[ -z "${v//[[:space:]]/}" ]]; then
+    echo "FAIL: /admin/validate returned empty (auth?)" >&2
+    echo "If /admin is asking for a token, run: codex-pocket token" >&2
+    return 1
+  fi
+  if ! printf '%s' "$v" | python3 - <<'PY'
+import json,sys
+d=json.loads(sys.stdin.read())
+sys.exit(0 if d.get("ok") else 2)
+PY
+  then
+    echo "FAIL: /admin/validate reported issues" >&2
+    printf '%s\n' "$v" | python3 -m json.tool 2>/dev/null || true
+    echo "Try: codex-pocket ensure" >&2
+    return 1
+  fi
+  echo "PASS: /admin/validate"
+
+  # 3) status should return JSON
+  if ! curl_auth "$base/admin/status" >/dev/null 2>&1; then
+    echo "FAIL: /admin/status failed" >&2
+    return 1
+  fi
+  echo "PASS: /admin/status"
+
+  echo "OK"
+}
+
 cmd_restart() {
   cmd_stop
   cmd_start
@@ -697,6 +745,10 @@ echo "Updated ${old:-?} -> ${new:-?}"
 SH
   chmod +x "$helper" >/dev/null 2>&1 || true
   bash "$helper"
+
+  # After updating/restarting, run ensure so users immediately get a clear signal.
+  # If the helper updated this CLI on disk, that's fine: bash has already parsed this function body.
+  cmd_ensure || true
 }
 
 main() {
@@ -707,6 +759,7 @@ main() {
     stop) shift; cmd_stop "$@";;
     restart) shift; cmd_restart "$@";;
     ensure) shift; cmd_ensure "$@";;
+    smoke-test) shift; cmd_smoke_test "$@";;
     status) shift; cmd_status "$@";;
     logs) shift; cmd_logs "$@";;
     pair) shift; cmd_pair "$@";;
