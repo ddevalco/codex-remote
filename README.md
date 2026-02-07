@@ -57,6 +57,10 @@ Then open on your Mac (to pair your iPhone):
 What to expect after pairing:
 - Your iPhone will open `https://<your-mac-magicdns-host>/` and connect automatically (no manual “server URL” setup).
 - Threads/models populate after the Anchor connects (usually a few seconds). If you see “No device connected”, check `/admin` and `~/.codex-pocket/anchor.log`.
+- Existing threads may appear immediately, but some Codex versions do not replay full historical transcripts into third-party UIs. In that case, only new activity will show up. (We’re iterating on better backfill.)
+
+Note about the Codex desktop app:
+- Codex Pocket is its own UI. Messages you send from Codex Pocket may not immediately appear in the Codex desktop app UI without a refresh/restart of the desktop app.
 
 ## Developer Notes
 - Local server: `services/local-orbit/src/index.ts`

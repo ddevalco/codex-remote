@@ -7,7 +7,8 @@ Open `/admin` in the browser.
 - Anchor log stream
 
 ## Pair iPhone
-- Click "New pairing code" to generate a short-lived pairing QR.
+- On first sign-in, `/admin` auto-generates a short-lived pairing QR.
+- Use "Regenerate pairing code" to mint a fresh QR (codes are one-time and expire).
 - Scan from iPhone to sign in without manually typing the token.
 
 ## Anchor control
