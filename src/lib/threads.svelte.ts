@@ -17,7 +17,23 @@ const DEFAULT_SETTINGS: ThreadSettings = {
 function normalizeThreadInfo(input: any): ThreadInfo {
   const thread = input && typeof input === "object" ? input : {};
   const id = String(thread.id ?? "");
-  const title = typeof thread.title === "string" ? thread.title : typeof thread.name === "string" ? thread.name : undefined;
+  // Codex app-server thread objects vary across versions. Titles may appear under different keys.
+  const title =
+    typeof thread.title === "string"
+      ? thread.title
+      : typeof thread.name === "string"
+        ? thread.name
+        : typeof thread.displayName === "string"
+          ? thread.displayName
+          : typeof thread.display_name === "string"
+            ? thread.display_name
+            : typeof thread.label === "string"
+              ? thread.label
+              : typeof thread?.metadata?.title === "string"
+                ? thread.metadata.title
+                : typeof thread?.meta?.title === "string"
+                  ? thread.meta.title
+                  : undefined;
   const preview =
     typeof thread.preview === "string"
       ? thread.preview
@@ -106,9 +122,11 @@ class ThreadsStore {
 
     // Some Codex app-server versions do not replay historical turns on thread/resume.
     // Try a best-effort fetch to backfill transcript for existing threads.
+    const getId = this.#nextId++;
+    this.#pendingRequests.set(getId, `get:${threadId}`);
     socket.send({
       method: "thread/get",
-      id: this.#nextId++,
+      id: getId,
       params: { threadId, includeTurns: true, include_turns: true },
     });
   }
@@ -195,6 +213,17 @@ class ThreadsStore {
         const result = msg.result as { data: any[] };
         this.list = (result.data || []).map(normalizeThreadInfo).filter((t) => t.id);
         this.loading = false;
+        // Best-effort: fetch thread metadata for visible threads so renamed titles show up.
+        // Keep this lightweight by omitting turns.
+        for (const t of this.list.slice(0, 25)) {
+          const metaId = this.#nextId++;
+          this.#pendingRequests.set(metaId, `meta:${t.id}`);
+          socket.send({
+            method: "thread/get",
+            id: metaId,
+            params: { threadId: t.id, includeTurns: false, include_turns: false },
+          });
+        }
       }
 
       if (type === "resume") {
@@ -227,6 +256,19 @@ class ThreadsStore {
             socket.subscribeThread(thread.id);
             this.#handleNewThread(thread);
           }
+        }
+      }
+
+      if (typeof type === "string" && (type.startsWith("get:") || type.startsWith("meta:")) && msg.result) {
+        const result = msg.result as any;
+        const threadObj =
+          result?.thread ??
+          result?.data?.thread ??
+          (result && typeof result === "object" && "id" in result ? result : null);
+        const thread = threadObj ? normalizeThreadInfo(threadObj) : null;
+        if (thread?.id) {
+          // Merge into list without losing preview/createdAt if missing.
+          this.list = this.list.map((t) => (t.id === thread.id ? { ...t, ...thread } : t));
         }
       }
     }

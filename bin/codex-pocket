@@ -263,6 +263,17 @@ cmd_start() {
     exit 1
   fi
 
+  # Ensure we don't pile up duplicate instances on restart/update.
+  kill_owned_listeners >/dev/null 2>&1 || true
+  local conflicts
+  conflicts="$(port_conflicts || true)"
+  if [[ -n "${conflicts:-}" ]]; then
+    echo "Port conflict detected:" >&2
+    echo "$conflicts" >&2
+    echo "Resolve the conflict (or change ports) and try again." >&2
+    exit 1
+  fi
+
   if [[ ! -f "$plist" ]]; then
     echo "Missing launchd plist: $plist" >&2
     echo "Re-run installer." >&2
@@ -455,6 +466,7 @@ cmd_update() {
     chmod +x "$APP_DIR/bin/codex-pocket" >/dev/null 2>&1 || true
   fi
 
+  # Start and verify health before returning.
   cmd_start
   echo "Updated ${old:-?} -> ${new:-?}"
 }
