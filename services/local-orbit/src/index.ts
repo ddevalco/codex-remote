@@ -613,6 +613,11 @@ const server = Bun.serve<{ role: Role }>({
 
       // Handle control messages
       const obj = parseJsonMessage(text);
+      if (obj?.type === "ping") {
+        // Heartbeat from browser. Must be handled even though it's not an orbit.* message.
+        send(ws, { type: "pong" });
+        return;
+      }
       if (obj && typeof obj.type === "string" && (obj.type as string).startsWith("orbit.")) {
         if (obj.type === "orbit.subscribe" && typeof obj.threadId === "string") {
           subscribe(role, ws, obj.threadId);
@@ -620,10 +625,6 @@ const server = Bun.serve<{ role: Role }>({
         }
         if (obj.type === "orbit.list-anchors") {
           send(ws, { type: "orbit.anchors", anchors: listAnchors() });
-          return;
-        }
-        if (obj.type === "ping") {
-          send(ws, { type: "pong" });
           return;
         }
         // ignore others for now
