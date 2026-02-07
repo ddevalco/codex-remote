@@ -590,82 +590,110 @@ cmd_open_admin() {
 
 
 cmd_update() {
+  # Run update steps in a helper script so we never truncate/overwrite $0 while
+  # Bash is still reading it (which causes "unexpected EOF").
   read_config
-  need_cmd git
 
-  local bun_bin
-  bun_bin="$(resolve_bun || true)"
-  if [[ -z "${bun_bin:-}" ]]; then
-    echo "bun is required to update." >&2
-    exit 1
+  local helper
+  helper="$(mktemp -t codex-pocket-update.XXXXXX)"
+  cat >"$helper" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_DIR="${CODEX_POCKET_HOME:-$HOME/.codex-pocket}"
+CONFIG_JSON="$APP_DIR/config.json"
+LABEL="com.codex.pocket"
+
+need_cmd() { command -v "$1" >/dev/null 2>&1 || { echo "Missing dependency: $1" >&2; exit 1; }; }
+
+resolve_bun() {
+  if command -v bun >/dev/null 2>&1; then command -v bun; return 0; fi
+  if [[ -x "$HOME/.bun/bin/bun" ]]; then echo "$HOME/.bun/bin/bun"; return 0; fi
+  if [[ -x "/opt/homebrew/bin/bun" ]]; then echo "/opt/homebrew/bin/bun"; return 0; fi
+  return 1
+}
+
+base_url() {
+  python3 - "$CONFIG_JSON" <<'PY'
+import json,sys
+with open(sys.argv[1]) as f:
+  d=json.load(f)
+print(f"http://{d.get('host','127.0.0.1')}:{d.get('port',8790)}")
+PY
+}
+
+stop_service() {
+  launchctl unload "$HOME/Library/LaunchAgents/${LABEL}.plist" >/dev/null 2>&1 || true
+  pkill -f "$APP_DIR/app/services/local-orbit/src/index.ts" >/dev/null 2>&1 || true
+  pkill -f "$APP_DIR/app/services/anchor/src/index.ts" >/dev/null 2>&1 || true
+}
+
+start_service() {
+  local base
+  base="$(base_url)"
+  launchctl load "$HOME/Library/LaunchAgents/${LABEL}.plist" >/dev/null 2>&1 || true
+  if ! curl -fsS "$base/health" >/dev/null 2>&1; then
+    # launchctl may fail; fallback to background
+    nohup "$HOME/.bun/bin/bun" run "$APP_DIR/app/services/local-orbit/src/index.ts" >>"$APP_DIR/server.log" 2>&1 &
   fi
+  # Wait a moment for health
+  for _ in $(seq 1 50); do
+    curl -fsS "$base/health" >/dev/null 2>&1 && return 0
+    sleep 0.1
+  done
+  return 1
+}
 
-  local repo_dir="$APP_DIR/app"
-  if [[ ! -d "$repo_dir/.git" ]]; then
-    echo "Install not found at $repo_dir (missing .git)." >&2
-    echo "Re-run the installer to set up the app." >&2
-    exit 1
-  fi
+need_cmd git
+need_cmd curl
 
-  local old
-  old="$(git -C "$repo_dir" rev-parse --short HEAD 2>/dev/null || true)"
+bun_bin="$(resolve_bun || true)"
+if [[ -z "${bun_bin:-}" ]]; then
+  echo "bun is required to update." >&2
+  exit 1
+fi
 
-  # Stop first to avoid file locks and port conflicts.
-  cmd_stop >/dev/null 2>&1 || true
+repo_dir="$APP_DIR/app"
+if [[ ! -d "$repo_dir/.git" ]]; then
+  echo "Install not found at $repo_dir (missing .git)." >&2
+  echo "Re-run the installer to set up the app." >&2
+  exit 1
+fi
 
-  # Refuse to update if the repo has local modifications.
-  if ! git -C "$repo_dir" diff --quiet 2>/dev/null; then
-    echo "Local changes detected in $repo_dir; refusing to update." >&2
-    echo "Commit/stash your changes or reinstall cleanly." >&2
-    exit 1
-  fi
-  if ! git -C "$repo_dir" diff --cached --quiet 2>/dev/null; then
-    echo "Staged changes detected in $repo_dir; refusing to update." >&2
-    echo "Commit/stash your changes or reinstall cleanly." >&2
-    exit 1
-  fi
+old="$(git -C "$repo_dir" rev-parse --short HEAD 2>/dev/null || true)"
 
-  echo "Updating Codex Pocket in $repo_dir"
-  git -C "$repo_dir" fetch --prune origin >/dev/null
-  git -C "$repo_dir" pull --ff-only origin main
+stop_service || true
 
-  local new
-  new="$(git -C "$repo_dir" rev-parse --short HEAD 2>/dev/null || true)"
+if ! git -C "$repo_dir" diff --quiet 2>/dev/null; then
+  echo "Local changes detected in $repo_dir; refusing to update." >&2
+  exit 1
+fi
+if ! git -C "$repo_dir" diff --cached --quiet 2>/dev/null; then
+  echo "Staged changes detected in $repo_dir; refusing to update." >&2
+  exit 1
+fi
 
-  echo "Building UI"
-  (cd "$repo_dir" && "$bun_bin" install)
-  (cd "$repo_dir" && "$bun_bin" run build)
+echo "Updating Codex Pocket in $repo_dir"
+git -C "$repo_dir" fetch --prune origin >/dev/null
+git -C "$repo_dir" pull --ff-only origin main
+new="$(git -C "$repo_dir" rev-parse --short HEAD 2>/dev/null || true)"
 
-  # Self-update the CLI if possible.
-  #
-  # IMPORTANT: Don't overwrite the currently-running script mid-flight.
-  # Bash reads scripts as it executes; truncating $0 can yield "unexpected EOF".
-  local cli_src="$repo_dir/bin/codex-pocket"
-  local cli_dst="$APP_DIR/bin/codex-pocket"
-  local cli_tmp="$APP_DIR/bin/codex-pocket.new"
-  local self_path
-  self_path="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
-  local defer_cli_swap="0"
-  if [[ -f "$cli_src" ]]; then
-    mkdir -p "$APP_DIR/bin" >/dev/null 2>&1 || true
-    cp "$cli_src" "$cli_tmp" >/dev/null 2>&1 || true
-    chmod +x "$cli_tmp" >/dev/null 2>&1 || true
-    if [[ "$self_path" == "$cli_dst" ]]; then
-      defer_cli_swap="1"
-    else
-      mv -f "$cli_tmp" "$cli_dst" >/dev/null 2>&1 || true
-      defer_cli_swap="0"
-    fi
-  fi
+echo "Building UI"
+(cd "$repo_dir" && "$bun_bin" install)
+(cd "$repo_dir" && "$bun_bin" run build)
 
-  # Start and verify health before returning.
-  cmd_start
-  echo "Updated ${old:-?} -> ${new:-?}"
+if [[ -f "$repo_dir/bin/codex-pocket" ]]; then
+  mkdir -p "$APP_DIR/bin" >/dev/null 2>&1 || true
+  cp "$repo_dir/bin/codex-pocket" "$APP_DIR/bin/codex-pocket.new" >/dev/null 2>&1 || true
+  chmod +x "$APP_DIR/bin/codex-pocket.new" >/dev/null 2>&1 || true
+  mv -f "$APP_DIR/bin/codex-pocket.new" "$APP_DIR/bin/codex-pocket" >/dev/null 2>&1 || true
+fi
 
-  # Finalize CLI swap only after all work is done.
-  if [[ "$defer_cli_swap" == "1" ]]; then
-    mv -f "$cli_tmp" "$cli_dst" >/dev/null 2>&1 || true
-  fi
+start_service || true
+echo "Updated ${old:-?} -> ${new:-?}"
+SH
+  chmod +x "$helper" >/dev/null 2>&1 || true
+  bash "$helper"
 }
 
 main() {
