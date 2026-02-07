@@ -1,5 +1,7 @@
 <script lang="ts">
   import { untrack } from "svelte";
+  import { marked } from "marked";
+  import DOMPurify from "dompurify";
   import ShimmerText from "./ShimmerText.svelte";
 
   interface Props {
@@ -40,6 +42,43 @@
   function toggle() {
     isOpen = !isOpen;
   }
+
+  const renderedHtml = $derived.by(() => {
+    const raw = content ?? "";
+    try {
+      const html = marked.parse(raw, {
+        async: false,
+        breaks: true,
+        headerIds: false,
+        mangle: false,
+      }) as string;
+      return DOMPurify.sanitize(html, {
+        ALLOWED_TAGS: [
+          "a",
+          "p",
+          "br",
+          "strong",
+          "em",
+          "code",
+          "pre",
+          "blockquote",
+          "ul",
+          "ol",
+          "li",
+          "hr",
+          "h1",
+          "h2",
+          "h3",
+          "h4",
+          "h5",
+          "h6",
+        ],
+        ALLOWED_ATTR: ["href", "title"],
+      });
+    } catch {
+      return DOMPurify.sanitize(raw);
+    }
+  });
 </script>
 
 <div class="reasoning">
@@ -78,7 +117,7 @@
 
   {#if isOpen}
     <div class="reasoning-content">
-      <p class="reasoning-text">{content}</p>
+      <div class="reasoning-text markdown">{@html renderedHtml}</div>
     </div>
   {/if}
 </div>
@@ -143,9 +182,21 @@
   .reasoning-text {
     color: var(--cli-text-dim);
     line-height: 1.6;
-    white-space: pre-wrap;
     word-break: break-word;
     margin: 0;
+  }
+
+  .markdown :global(p) {
+    margin: 0;
+  }
+
+  .markdown :global(pre) {
+    margin: 0;
+    padding: var(--space-sm);
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-sm);
+    overflow: auto;
   }
 
   @keyframes slideIn {

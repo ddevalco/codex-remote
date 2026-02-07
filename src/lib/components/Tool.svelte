@@ -1,6 +1,8 @@
 <script lang="ts">
   import { untrack } from "svelte";
   import type { Message } from "../types";
+  import { marked } from "marked";
+  import DOMPurify from "dompurify";
 
   interface Props {
     message: Message;
@@ -91,6 +93,57 @@
     }
 
     return { title: text.slice(0, 50), content: text };
+  });
+
+  const renderMarkdown = $derived.by(() => {
+    // Commands and file diffs are best shown verbatim.
+    if (message.kind === "command" || message.kind === "file") return false;
+    // These tool messages often contain markdown (e.g. **bold**, links, lists).
+    return (
+      message.kind === "plan" ||
+      message.kind === "review" ||
+      message.kind === "mcp" ||
+      message.kind === "collab" ||
+      message.kind === "web"
+    );
+  });
+
+  const renderedToolHtml = $derived.by(() => {
+    if (!renderMarkdown) return "";
+    const raw = toolInfo.content ?? "";
+    try {
+      const html = marked.parse(raw, {
+        async: false,
+        breaks: true,
+        headerIds: false,
+        mangle: false,
+      }) as string;
+      return DOMPurify.sanitize(html, {
+        ALLOWED_TAGS: [
+          "a",
+          "p",
+          "br",
+          "strong",
+          "em",
+          "code",
+          "pre",
+          "blockquote",
+          "ul",
+          "ol",
+          "li",
+          "hr",
+          "h1",
+          "h2",
+          "h3",
+          "h4",
+          "h5",
+          "h6",
+        ],
+        ALLOWED_ATTR: ["href", "title"],
+      });
+    } catch {
+      return DOMPurify.sanitize(raw);
+    }
   });
 
   // Status based on exit code or content
@@ -206,7 +259,11 @@
 
   {#if isOpen && hasContent}
     <div class="tool-content">
-      <pre class="tool-output">{toolInfo.content}</pre>
+      {#if renderMarkdown}
+        <div class="tool-output markdown">{@html renderedToolHtml}</div>
+      {:else}
+        <pre class="tool-output">{toolInfo.content}</pre>
+      {/if}
     </div>
   {/if}
 </div>
@@ -300,6 +357,24 @@
     word-break: break-word;
     max-height: 300px;
     overflow-y: auto;
+
+  .markdown :global(p) {
+    margin: 0;
+  }
+
+  .markdown :global(pre) {
+    margin: 0;
+    padding: var(--space-sm);
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-sm);
+    overflow: auto;
+  }
+
+  .markdown :global(code) {
+    font-family: var(--font-mono);
+  }
+
   }
 
   @keyframes slideIn {
