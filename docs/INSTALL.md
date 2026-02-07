@@ -25,6 +25,28 @@ Notes:
 - Tailnet access: `https://<your-mac-magicdns-host>/`
 - Admin: `/admin`
 
+## Tailscale Setup (Mac + iPhone)
+
+Codex Pocket is designed to be used over **Tailscale** so it stays private (tailnet-only) and encrypted.
+
+1. Create a (free) Tailscale account: https://tailscale.com/
+2. Install Tailscale on your Mac and iPhone
+3. Sign in to both with the same account
+4. On the Mac, run:
+
+```bash
+tailscale up
+```
+
+5. Expose Codex Pocket on your tailnet (on the Mac):
+
+```bash
+tailscale serve --bg http://127.0.0.1:8790
+```
+
+If you see "Serve is not enabled on your tailnet", Tailscale will print a link.
+Open it and enable Tailscale Serve for your tailnet.
+
 ## Uninstall
 1. Stop and remove launchd agent:
 

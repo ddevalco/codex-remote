@@ -83,14 +83,22 @@ If you only want to wipe without reinstalling, run the local script after instal
 ## Enable iPhone Access (Tailscale)
 
 If you do not have Tailscale yet:
-1. Install Tailscale on Mac + iPhone and sign in
-2. Run `tailscale up` on the Mac
+1. Create a (free) Tailscale account: https://tailscale.com/
+2. Install Tailscale on Mac + iPhone and sign in to both with the same account
+3. Run `tailscale up` on the Mac
+
+Terminology:
+- A **tailnet** is your private Tailscale network (your account/org + its devices).
+- **MagicDNS** is Tailscale's stable DNS name for your devices (e.g. `my-mac.tailXXXX.ts.net`).
 
 Expose the service on your tailnet (run on Mac):
 
 ```bash
 tailscale serve --bg http://127.0.0.1:8790
 ```
+
+Note: Some tailnets require you to enable Tailscale Serve in the admin console the first time.
+If you see an error like "Serve is not enabled on your tailnet", follow the link it prints and enable it.
 
 Then open on your Mac (to pair your iPhone):
 - `http://127.0.0.1:8790/admin`
