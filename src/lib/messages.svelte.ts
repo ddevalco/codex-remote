@@ -884,13 +884,29 @@ class MessagesStore {
     return (params.threadId as string) || (params.thread_id as string) || null;
   }
 
-  #loadThread(threadId: string, turns: Array<{ items?: unknown[] }>) {
+  #loadThread(threadId: string, turns: unknown[]) {
     const messages: Message[] = [];
 
-    for (const turn of turns) {
-      if (!turn.items) continue;
+    // Some upstreams return `turns: [{items:[...]}]` while others return `items: [...]`
+    // directly. Normalize to a flat list of items.
+    const items: Array<Record<string, unknown>> = [];
+    const first = (turns as any[])[0];
+    if (first && typeof first === "object" && Array.isArray((first as any).items)) {
+      for (const turn of turns as Array<{ items?: unknown[] }>) {
+        if (!turn.items) continue;
+        for (const it of turn.items as Array<Record<string, unknown>>) {
+          items.push(it);
+        }
+      }
+    } else {
+      for (const it of turns as any[]) {
+        if (it && typeof it === "object" && typeof (it as any).type === "string") {
+          items.push(it as Record<string, unknown>);
+        }
+      }
+    }
 
-      for (const item of turn.items as Array<Record<string, unknown>>) {
+    for (const item of items) {
         const id = (item.id as string) || `item-${Date.now()}-${Math.random()}`;
         const type = item.type as string;
 
@@ -1024,7 +1040,6 @@ class MessagesStore {
             messages.push({ id, role: "tool", kind: "compaction", text: "Context compacted", threadId });
             break;
         }
-      }
     }
 
     // Mark plans as approved if a user message follows them

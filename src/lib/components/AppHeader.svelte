@@ -4,6 +4,7 @@
     import { socket } from "../socket.svelte";
     import { connectionManager } from "../connection-manager.svelte";
     import { anchors } from "../anchors.svelte";
+    import { navigate } from "../../router";
     import ShimmerDot from "./ShimmerDot.svelte";
 
     interface Props {
@@ -68,7 +69,17 @@
 
 <header class="app-header">
     <div class="app-header-inner row">
-        <a href="/app" class="brand">codex-pocket</a>
+        <a
+            href="/app"
+            class="brand"
+            onclick={(e) => {
+                // Avoid full page reloads (especially important on iOS Safari/PWA).
+                e.preventDefault();
+                navigate("/app");
+            }}
+        >
+            codex-pocket
+        </a>
         <span class="separator">·</span>
         <button
             type="button"
