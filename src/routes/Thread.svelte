@@ -29,6 +29,33 @@
     const threadId = $derived(route.params.id);
 
 
+    const turnStatus = $derived.by(() => {
+        const id = threadId;
+        return id ? messages.getTurnStatus(id) : null;
+    });
+    const isInProgress = $derived.by(() => (turnStatus ?? "").toLowerCase() === "inprogress");
+    const isReasoningStreaming = $derived.by(() => {
+        const id = threadId;
+        return id ? messages.getIsReasoningStreaming(id) : false;
+    });
+    const streamingReasoningText = $derived.by(() => {
+        const id = threadId;
+        return id ? messages.getStreamingReasoningText(id) : "";
+    });
+    const statusDetail = $derived.by(() => {
+        const id = threadId;
+        return id ? messages.getStatusDetail(id) : null;
+    });
+    const planExplanation = $derived.by(() => {
+        const id = threadId;
+        return id ? messages.getPlanExplanation(id) : null;
+    });
+    const plan = $derived.by(() => {
+        const id = threadId;
+        return id ? messages.getPlan(id) : [];
+    });
+
+
     $effect(() => {
         if (threadId && socket.status === "connected" && threads.currentId !== threadId) {
             threads.open(threadId);
@@ -58,9 +85,9 @@
     });
 
     $effect(() => {
-        if ((messages.turnStatus ?? "").toLowerCase() === "inprogress" && !turnStartTime) {
+        if (isInProgress && !turnStartTime) {
             turnStartTime = Date.now();
-        } else if ((messages.turnStatus ?? "").toLowerCase() !== "inprogress") {
+        } else if (!isInProgress) {
             turnStartTime = undefined;
         }
     });
@@ -212,7 +239,7 @@
                 {:else if message.kind === "plan"}
                     <PlanCard
                         {message}
-                        disabled={(messages.turnStatus ?? "").toLowerCase() === "inprogress" || !socket.isHealthy}
+                        disabled={isInProgress || !socket.isHealthy}
                         latest={message.id === lastPlanId}
                         onApprove={() => handlePlanApprove(message.id)}
                     />
@@ -221,20 +248,20 @@
                 {/if}
             {/each}
 
-            {#if messages.isReasoningStreaming}
+            {#if isReasoningStreaming}
                 <div class="streaming-reasoning">
                     <Reasoning
-                        content={messages.streamingReasoningText}
+                        content={streamingReasoningText}
                         isStreaming={true}
                         defaultOpen={true}
                     />
                 </div>
             {/if}
 
-            {#if (messages.turnStatus ?? "").toLowerCase() === "inprogress" && !messages.isReasoningStreaming}
+            {#if isInProgress && !isReasoningStreaming}
                 <WorkingStatus
-                    detail={messages.statusDetail ?? messages.planExplanation}
-                    plan={messages.plan}
+                    detail={statusDetail ?? planExplanation}
+                    plan={plan}
                     startTime={turnStartTime}
                 />
             {/if}
@@ -261,8 +288,8 @@
         {mode}
         modelOptions={models.options}
         modelsLoading={models.status === "loading"}
-        disabled={(messages.turnStatus ?? "").toLowerCase() === "inprogress" || !socket.isHealthy}
-        onStop={(messages.turnStatus ?? "").toLowerCase() === "inprogress" ? handleStop : undefined}
+        disabled={isInProgress || !socket.isHealthy}
+        onStop={isInProgress ? handleStop : undefined}
         onSubmit={handleSubmit}
         onModelChange={(v) => model = v}
         onReasoningChange={(v) => reasoningEffort = v}
