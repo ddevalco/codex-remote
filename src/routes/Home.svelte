@@ -3,6 +3,7 @@
   import { threads } from "../lib/threads.svelte";
   import { models } from "../lib/models.svelte";
   import { theme } from "../lib/theme.svelte";
+  import { auth } from "../lib/auth.svelte";
   import AppHeader from "../lib/components/AppHeader.svelte";
   import ProjectPicker from "../lib/components/ProjectPicker.svelte";
   import ShimmerDot from "../lib/components/ShimmerDot.svelte";
@@ -101,6 +102,31 @@
       threads.fetchCollaborationPresets();
     }
   });
+
+  async function renameThread(thread: { id: string; title?: string; name?: string; preview?: string }) {
+    const current = (thread.title || thread.name || "").trim();
+    const next = window.prompt("Rename thread", current);
+    if (next == null) return; // cancel
+    const title = next.trim();
+
+    const headers: Record<string, string> = { "content-type": "application/json" };
+    if (auth.token) headers.authorization = `Bearer ${auth.token}`;
+
+    const res = await fetch("/admin/thread/title", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ threadId: thread.id, title }),
+    }).catch(() => null);
+
+    if (!res || !res.ok) {
+      alert("Failed to rename thread. Open Admin and sign in with the Access Token first.");
+      return;
+    }
+
+    // Update UI immediately; local-orbit will also inject titles from Codex's local title store.
+    (thread as any).title = title;
+    (thread as any).name = title;
+  }
 </script>
 
 <svelte:head>
@@ -152,6 +178,7 @@
                 <span class="thread-preview">{thread.title || thread.name || thread.preview || "New thread"}</span>
                 <span class="thread-meta">{formatTime(thread.createdAt)}</span>
               </a>
+              <button class="rename-btn" onclick={() => renameThread(thread)} title="Rename thread">✎</button>
               <button
                 class="archive-btn"
                 onclick={() => threads.archive(thread.id)}
@@ -518,6 +545,20 @@
     font-size: var(--text-base);
     cursor: pointer;
     transition: color var(--transition-fast);
+  }
+
+  .rename-btn {
+    padding: var(--space-sm) var(--space-md);
+    background: transparent;
+    border: none;
+    color: var(--cli-text-muted);
+    font-size: var(--text-base);
+    cursor: pointer;
+    transition: color var(--transition-fast);
+  }
+
+  .rename-btn:hover {
+    color: var(--cli-text);
   }
 
   .archive-btn:hover {

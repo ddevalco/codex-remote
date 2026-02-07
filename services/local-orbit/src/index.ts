@@ -560,6 +560,83 @@ async function loadCodexThreadTitles(): Promise<ThreadTitleMap> {
   }
 }
 
+async function withFileLock(lockPath: string, fn: () => Promise<void>): Promise<void> {
+  // Best-effort lock: create file exclusively. Retry briefly if another writer holds it.
+  const started = Date.now();
+  for (;;) {
+    try {
+      const f = Bun.file(lockPath);
+      // Bun doesn't expose O_EXCL directly; emulate by writing only if missing.
+      if (!(await f.exists())) {
+        await Bun.write(lockPath, String(process.pid ?? "") + "\n");
+        break;
+      }
+    } catch {
+      // ignore
+    }
+    if (Date.now() - started > 2000) throw new Error("Timed out waiting for title lock");
+    await new Promise((r) => setTimeout(r, 75));
+  }
+  try {
+    await fn();
+  } finally {
+    try {
+      await Bun.write(lockPath, ""); // ensure it is writable before unlink attempt on some FS
+    } catch {
+      // ignore
+    }
+    try {
+      await Bun.file(lockPath).delete();
+    } catch {
+      // ignore
+    }
+  }
+}
+
+async function setCodexThreadTitle(threadId: string, title: string | null): Promise<void> {
+  const path = getCodexGlobalStatePath();
+  const lockPath = `${path}.lock`;
+  const trimmedId = threadId.trim();
+  const trimmedTitle = (title ?? "").trim();
+  if (!trimmedId) throw new Error("threadId is required");
+
+  await withFileLock(lockPath, async () => {
+    const text = await Bun.file(path).text();
+    const json = JSON.parse(text) as Record<string, any>;
+    json["thread-titles"] = json["thread-titles"] && typeof json["thread-titles"] === "object" ? json["thread-titles"] : {};
+    json["thread-titles"].titles =
+      json["thread-titles"].titles && typeof json["thread-titles"].titles === "object" ? json["thread-titles"].titles : {};
+
+    if (!trimmedTitle) {
+      // Clear title
+      try {
+        delete json["thread-titles"].titles[trimmedId];
+      } catch {
+        // ignore
+      }
+    } else {
+      json["thread-titles"].titles[trimmedId] = trimmedTitle;
+      // Keep order list populated so Codex can show "recent" titles deterministically.
+      if (!Array.isArray(json["thread-titles"].order)) json["thread-titles"].order = [];
+      if (!json["thread-titles"].order.includes(trimmedId)) json["thread-titles"].order.unshift(trimmedId);
+    }
+
+    const backupPath = `${path}.bak.${Date.now()}`;
+    try {
+      await Bun.write(backupPath, text);
+    } catch {
+      // ignore backup failures
+    }
+    const tmpPath = `${path}.tmp`;
+    await Bun.write(tmpPath, JSON.stringify(json, null, 2) + "\n");
+    // Atomic-ish replace
+    await Bun.file(tmpPath).rename(path);
+
+    // Invalidate title cache so relays pick up the new title immediately.
+    cachedThreadTitles = null;
+  });
+}
+
 async function injectThreadTitles(msg: Record<string, unknown>): Promise<void> {
   const titles = await loadCodexThreadTitles();
   if (!titles || Object.keys(titles).length === 0) return;
@@ -803,25 +880,44 @@ const server = Bun.serve<{ role: Role }>({
       }
     }
 
-    if (url.pathname === "/admin/ops" && method === "GET") {
-      if (!authorised(req)) return unauth();
-      const limit = Math.min(500, Math.max(1, Number(url.searchParams.get("limit") ?? 100) || 100));
-      try {
-        const rows = db
-          .prepare("SELECT payload FROM events WHERE thread_id = ? ORDER BY id DESC LIMIT ?")
-          .all("admin", limit) as Array<{ payload: string }>;
-        const data = rows
-          .map((r) => redactSensitive(r.payload))
-          .reverse();
-        return okJson({ limit, data });
-      } catch {
-        return new Response("Failed to query ops log", { status: 500 });
-      }
-    }
+	    if (url.pathname === "/admin/ops" && method === "GET") {
+	      if (!authorised(req)) return unauth();
+	      const limit = Math.min(500, Math.max(1, Number(url.searchParams.get("limit") ?? 100) || 100));
+	      try {
+	        const rows = db
+	          .prepare("SELECT payload FROM events WHERE thread_id = ? ORDER BY id DESC LIMIT ?")
+	          .all("admin", limit) as Array<{ payload: string }>;
+	        const data = rows
+	          .map((r) => redactSensitive(r.payload))
+	          .reverse();
+	        return okJson({ limit, data });
+	      } catch {
+	        return new Response("Failed to query ops log", { status: 500 });
+	      }
+	    }
 
-	    if (url.pathname === "/admin/token/rotate" && req.method === "POST") {
-      if (!authorised(req)) return unauth();
-      const next = randomTokenHex(32);
+	    if (url.pathname === "/admin/thread/title" && req.method === "POST") {
+	      if (!authorised(req)) return unauth();
+	      const body = (await req.json().catch(() => null)) as null | {
+	        threadId?: string;
+	        title?: string | null;
+	      };
+	      const threadId = (body?.threadId ?? "").trim();
+	      const title = body?.title ?? null;
+	      if (!threadId) return okJson({ error: "threadId is required" }, { status: 400 });
+	      try {
+	        await setCodexThreadTitle(threadId, title);
+	        logAdmin(`thread title set: ${threadId} -> ${typeof title === "string" ? JSON.stringify(title) : "null"}`);
+	        return okJson({ ok: true });
+	      } catch (err) {
+	        const msg = err instanceof Error ? err.message : "failed to set thread title";
+	        return okJson({ error: msg }, { status: 500 });
+	      }
+	    }
+
+		    if (url.pathname === "/admin/token/rotate" && req.method === "POST") {
+	      if (!authorised(req)) return unauth();
+	      const next = randomTokenHex(32);
 
       // Update in-memory token and persist to config.json if available.
       AUTH_TOKEN = next;
