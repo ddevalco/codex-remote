@@ -33,6 +33,7 @@ Commands:
   diagnose               Run a diagnostic report for troubleshooting
   open-admin             Open the local Admin page in your browser
   update                 Update the installed app (git pull, rebuild, restart, ensure)
+  summary                Print current config + URLs + log locations
 
 Environment:
   CODEX_POCKET_HOME       Defaults to ~/.codex-pocket
@@ -161,6 +162,26 @@ curl_auth() {
   local tok
   tok="$(token)"
   curl -fsS -H "Authorization: Bearer $tok" "$url" "$@"
+}
+
+curl_auth_soft() {
+  # Like curl_auth, but does not use `-f` so callers can inspect 401/500 bodies.
+  local url="$1"; shift
+  local tok
+  tok="$(token)"
+  curl -sS -H "Authorization: Bearer $tok" "$url" "$@"
+}
+
+curl_auth_soft_with_code() {
+  # Prints "<http_code>\n<body>" (body may be empty).
+  local url="$1"; shift
+  local tok
+  tok="$(token)"
+  local resp
+  resp="$(curl -sS -w $'\n__CODE__%{http_code}' -H "Authorization: Bearer $tok" "$url" "$@" || true)"
+  local code="${resp##*$'\n__CODE__'}"
+  local body="${resp%$'\n__CODE__'*}"
+  printf '%s\n%s' "$code" "$body"
 }
 
 
@@ -532,32 +553,42 @@ cmd_ensure() {
   fi
 
   echo "Validating..."
-  local v
-  # Don't hide parse failures: capture stdout only, but tolerate non-JSON bodies.
-  v="$(curl_auth "$base/admin/validate" 2>/dev/null || true)"
-  # Treat whitespace-only output as failure (e.g. curl returning nothing).
-  if [[ -z "${v//[[:space:]]/}" ]]; then
-    echo "Validate failed (auth?). If /admin is asking for a token, run: codex-pocket token" >&2
+  local code body
+  code="$(curl_auth_soft_with_code "$base/admin/validate" 2>/dev/null | head -n 1 | tr -d '\r')"
+  body="$(curl_auth_soft_with_code "$base/admin/validate" 2>/dev/null | sed '1d')"
+
+  if [[ "$code" == "401" ]]; then
+    echo "Validate failed: 401 Unauthorised" >&2
+    echo "If /admin is asking for a token, run: codex-pocket token" >&2
     return 1
   fi
-
-  printf '%s' "$v" | python3 - <<'PY'
+  if [[ -z "${body//[[:space:]]/}" ]]; then
+    echo "Validate failed: empty response (HTTP $code)" >&2
+    echo "Next: codex-pocket diagnose" >&2
+    return 1
+  fi
+  if [[ "${body:0:1}" != "{" ]]; then
+    echo "Validate returned non-JSON (HTTP $code). First 200 bytes:" >&2
+    printf '%s\n' "${body:0:200}" >&2
+    return 1
+  fi
+  if ! printf '%s' "$body" | python3 - <<'PY'
 import json,sys
-raw=sys.stdin.read()
-try:
-  d=json.loads(raw)
-except Exception as e:
-  print("Validate returned non-JSON. First 200 bytes:", file=sys.stderr)
-  print(raw[:200], file=sys.stderr)
-  raise
-print("OK" if d.get("ok") else "ISSUES")
+d=json.loads(sys.stdin.read())
+sys.exit(0 if d.get("ok") else 2)
 PY
+  then
+    echo "Validate reported issues." >&2
+    printf '%s\n' "$body" | python3 -m json.tool 2>/dev/null || true
+    return 1
+  fi
+  echo "OK"
 
   echo "Repairing (safe actions)..."
   curl_auth "$base/admin/repair" -X POST -H 'content-type: application/json' -d '{"actions":["ensureUploadDir","startAnchor","pruneUploads","fixTailscaleServe"]}' >/dev/null 2>&1 || true
 
   echo "Re-validating..."
-  curl_auth "$base/admin/validate" | python3 - <<'PY'
+  curl_auth_soft "$base/admin/validate" | python3 - <<'PY'
 import json,sys
 raw=sys.stdin.read()
 try:
@@ -596,21 +627,31 @@ cmd_smoke_test() {
   echo "PASS: /health"
 
   # 2) validate (requires token)
-  local v
-  v="$(curl_auth "$base/admin/validate" 2>/dev/null || true)"
-  if [[ -z "${v//[[:space:]]/}" ]]; then
-    echo "FAIL: /admin/validate returned empty (auth?)" >&2
-    echo "If /admin is asking for a token, run: codex-pocket token" >&2
+  local code body
+  code="$(curl_auth_soft_with_code "$base/admin/validate" 2>/dev/null | head -n 1 | tr -d '\r')"
+  body="$(curl_auth_soft_with_code "$base/admin/validate" 2>/dev/null | sed '1d')"
+  if [[ "$code" == "401" ]]; then
+    echo "FAIL: /admin/validate unauthorised (token mismatch?)" >&2
+    echo "Run: codex-pocket token" >&2
     return 1
   fi
-  if ! printf '%s' "$v" | python3 - <<'PY'
+  if [[ -z "${body//[[:space:]]/}" ]]; then
+    echo "FAIL: /admin/validate returned empty (HTTP $code)" >&2
+    return 1
+  fi
+  if [[ "${body:0:1}" != "{" ]]; then
+    echo "FAIL: /admin/validate returned non-JSON (HTTP $code):" >&2
+    printf '%s\n' "${body:0:200}" >&2
+    return 1
+  fi
+  if ! printf '%s' "$body" | python3 - <<'PY'
 import json,sys
 d=json.loads(sys.stdin.read())
 sys.exit(0 if d.get("ok") else 2)
 PY
   then
     echo "FAIL: /admin/validate reported issues" >&2
-    printf '%s\n' "$v" | python3 -m json.tool 2>/dev/null || true
+    printf '%s\n' "$body" | python3 -m json.tool 2>/dev/null || true
     echo "Try: codex-pocket ensure" >&2
     return 1
   fi
@@ -764,8 +805,13 @@ if [[ -f "$repo_dir/bin/codex-pocket" ]]; then
   mv -f "$APP_DIR/bin/codex-pocket.new" "$APP_DIR/bin/codex-pocket" >/dev/null 2>&1 || true
 fi
 
-start_service || true
-echo "Updated ${old:-?} -> ${new:-?}"
+  if ! start_service; then
+    echo "ERROR: service did not become healthy after update." >&2
+    echo "Last 80 lines of server.log:" >&2
+    tail -n 80 "$APP_DIR/server.log" >&2 || true
+    exit 1
+  fi
+  echo "Updated ${old:-?} -> ${new:-?}"
 SH
   chmod +x "$helper" >/dev/null 2>&1 || true
   bash "$helper"
