@@ -634,8 +634,31 @@ start_service() {
   base="$(base_url)"
   launchctl load "$HOME/Library/LaunchAgents/${LABEL}.plist" >/dev/null 2>&1 || true
   if ! curl -fsS "$base/health" >/dev/null 2>&1; then
-    # launchctl may fail; fallback to background
-    nohup "$HOME/.bun/bin/bun" run "$APP_DIR/app/services/local-orbit/src/index.ts" >>"$APP_DIR/server.log" 2>&1 &
+    # launchctl may fail; fallback to background. Provide config/token env so the
+    # server doesn't start "unconfigured" (Access Token is required...).
+    tok="$(python3 - "$CONFIG_JSON" <<'PY'\nimport json,sys\nwith open(sys.argv[1]) as f:\n  d=json.load(f)\nprint(d.get('token',''))\nPY\n)"
+    host="$(python3 - "$CONFIG_JSON" <<'PY'\nimport json,sys\nwith open(sys.argv[1]) as f:\n  d=json.load(f)\nprint(d.get('host','127.0.0.1'))\nPY\n)"
+    port="$(python3 - "$CONFIG_JSON" <<'PY'\nimport json,sys\nwith open(sys.argv[1]) as f:\n  d=json.load(f)\nprint(int(d.get('port',8790)))\nPY\n)"
+    db="$(python3 - "$CONFIG_JSON" <<'PY'\nimport json,sys\nwith open(sys.argv[1]) as f:\n  d=json.load(f)\nprint(d.get('db',''))\nPY\n)"
+    retention="$(python3 - "$CONFIG_JSON" <<'PY'\nimport json,sys\nwith open(sys.argv[1]) as f:\n  d=json.load(f)\nprint(d.get('retentionDays',14))\nPY\n)"
+    pub="$(python3 - "$CONFIG_JSON" <<'PY'\nimport json,sys\nwith open(sys.argv[1]) as f:\n  d=json.load(f)\nprint(d.get('publicOrigin',''))\nPY\n)"
+
+    nohup env \
+      ZANE_LOCAL_TOKEN="$tok" \
+      ZANE_LOCAL_CONFIG_JSON="$CONFIG_JSON" \
+      ZANE_LOCAL_HOST="$host" \
+      ZANE_LOCAL_PORT="$port" \
+      ZANE_LOCAL_DB="$db" \
+      ZANE_LOCAL_RETENTION_DAYS="$retention" \
+      ZANE_LOCAL_PUBLIC_ORIGIN="$pub" \
+      ZANE_LOCAL_UI_DIST_DIR="$APP_DIR/app/dist" \
+      ZANE_LOCAL_ANCHOR_CWD="$APP_DIR/app/services/anchor" \
+      ZANE_LOCAL_ANCHOR_LOG="$APP_DIR/anchor.log" \
+      ANCHOR_HOST="127.0.0.1" \
+      ANCHOR_PORT="8788" \
+      ZANE_LOCAL_ANCHOR_CMD="$bun_bin" \
+      ZANE_LOCAL_AUTOSTART_ANCHOR="1" \
+      "$bun_bin" run "$APP_DIR/app/services/local-orbit/src/index.ts" >>"$APP_DIR/server.log" 2>&1 </dev/null &
   fi
   # Wait a moment for health
   for _ in $(seq 1 50); do
