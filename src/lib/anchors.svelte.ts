@@ -44,7 +44,10 @@ class AnchorsStore {
         this.status = "connected";
         this.#clearTimeout();
       } else if (msg.type === "orbit.anchor-disconnected") {
-        this.list = this.list.filter((a) => a.id !== (msg.anchorId as string));
+        const anchorId = (msg.anchorId as string) || ((msg.anchor as AnchorInfo | undefined)?.id as string);
+        if (anchorId) {
+          this.list = this.list.filter((a) => a.id !== anchorId);
+        }
         this.status = this.list.length ? "connected" : "none";
       }
     });

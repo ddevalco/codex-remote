@@ -171,8 +171,16 @@ class MessagesStore {
       const lines = text.split(/\r?\n/).filter(Boolean);
       for (const line of lines) {
         try {
-          const msg = JSON.parse(line) as RpcMessage;
-          this.handleMessage(msg);
+          // local-orbit stores wrapper objects:
+          // { ts, direction, message: <rpc> }
+          const parsed = JSON.parse(line) as any;
+          const msg: RpcMessage | null =
+            parsed && typeof parsed === "object" && parsed.message && typeof parsed.message === "object"
+              ? (parsed.message as RpcMessage)
+              : parsed && typeof parsed === "object"
+                ? (parsed as RpcMessage)
+                : null;
+          if (msg) this.handleMessage(msg);
         } catch {
           // ignore malformed line
         }

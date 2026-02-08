@@ -1437,7 +1437,8 @@ const server = Bun.serve<{ role: Role }>({
 
       if (role === "anchor") {
         const meta: AnchorMeta = {
-          id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          // Temporary id until we learn hostname/platform (anchor.hello).
+          id: "pending",
           hostname: "unknown",
           platform: "unknown",
           connectedAt: new Date().toISOString(),
@@ -1476,6 +1477,10 @@ const server = Bun.serve<{ role: Role }>({
         if (meta) {
           meta.hostname = typeof obj.hostname === "string" ? obj.hostname : meta.hostname;
           meta.platform = typeof obj.platform === "string" ? obj.platform : meta.platform;
+          // Stable identity so UI can dedupe across reconnects.
+          if (meta.hostname !== "unknown" || meta.platform !== "unknown") {
+            meta.id = `${meta.hostname}:${meta.platform}`;
+          }
           broadcastToClients({ type: "orbit.anchor-connected", anchor: meta });
         }
         return;
@@ -1492,7 +1497,8 @@ const server = Bun.serve<{ role: Role }>({
         const meta = anchorMeta.get(ws);
         if (meta) {
           anchorMeta.delete(ws);
-          broadcastToClients({ type: "orbit.anchor-disconnected", anchor: meta });
+          // Client expects anchorId for removal.
+          broadcastToClients({ type: "orbit.anchor-disconnected", anchorId: meta.id, anchor: meta });
         }
       }
     },
