@@ -29,6 +29,28 @@ class MessagesStore {
   #turnCompleteCallbacks = new Map<string, TurnCompleteCallback>();
   #pendingAgentMessageIds = new Map<string, string>();
 
+  #textFromContent(value: unknown): string {
+    // Codex content shapes vary by version:
+    // - [{type:"text", text:"..."}]
+    // - {type:"text", text:"..."}
+    // - "..."
+    if (typeof value === "string") return value;
+    if (Array.isArray(value)) {
+      for (const part of value as any[]) {
+        if (part && typeof part === "object" && (part as any).type === "text" && typeof (part as any).text === "string") {
+          return (part as any).text as string;
+        }
+      }
+      return "";
+    }
+    if (value && typeof value === "object") {
+      const v: any = value;
+      if (typeof v.text === "string") return v.text;
+      if (Array.isArray(v.content)) return this.#textFromContent(v.content);
+    }
+    return "";
+  }
+
   // Last observed activity time (unix seconds) per thread. Used for sorting thread list.
   #lastActivityByThread = $state<Map<string, number>>(new Map());
 
@@ -556,8 +578,12 @@ class MessagesStore {
         // make `existing` non-empty and inadvertently block history loading, resulting in
         // a "blank thread" UX. History load dedupes by `id` anyway.
         if (!this.#loadedThreads.has(threadId)) {
-          this.#loadedThreads.add(threadId);
-          this.#loadThread(threadId, turns);
+          try {
+            this.#loadThread(threadId, turns);
+            this.#loadedThreads.add(threadId);
+          } catch {
+            // If history parsing throws, don't permanently mark this thread as loaded.
+          }
         }
       }
       return;
@@ -581,8 +607,7 @@ class MessagesStore {
       const type = item.type as string;
       if (type === "userMessage") {
         const itemId = item.id as string;
-        const content = item.content as Array<{ type: string; text?: string }>;
-        const text = content?.find((c) => c.type === "text")?.text || "";
+        const text = this.#textFromContent((item as any).content) || "";
 
         this.#add(threadId, {
           id: itemId,
@@ -1010,13 +1035,13 @@ class MessagesStore {
     }
 
     for (const item of items) {
+      try {
         const id = (item.id as string) || `item-${Date.now()}-${Math.random()}`;
         const type = item.type as string;
 
         switch (type) {
           case "userMessage": {
-            const content = item.content as Array<{ type: string; text?: string }>;
-            const text = content?.find((c) => c.type === "text")?.text || "";
+            const text = this.#textFromContent((item as any).content) || "";
             messages.push({ id, role: "user", text, threadId });
             break;
           }
@@ -1143,6 +1168,9 @@ class MessagesStore {
             messages.push({ id, role: "tool", kind: "compaction", text: "Context compacted", threadId });
             break;
         }
+      } catch {
+        // Skip malformed history items; don't blank the whole thread.
+      }
     }
 
     // Mark plans as approved if a user message follows them
