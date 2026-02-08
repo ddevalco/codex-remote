@@ -1,6 +1,7 @@
 import type { Message, RpcMessage, ApprovalRequest, UserInputRequest, UserInputQuestion, TurnStatus, PlanStep, CollaborationMode } from "./types";
 import { socket } from "./socket.svelte";
 import { threads } from "./threads.svelte";
+import { api } from "./api";
 
 const STORE_KEY = "__zane_messages_store__";
 
@@ -154,6 +155,30 @@ class MessagesStore {
       if (key.startsWith(`${threadId}:`)) {
         this.#streamingText.delete(key);
       }
+    }
+  }
+
+  async rehydrateFromEvents(threadId: string) {
+    // Best-effort transcript restore from Codex Pocket's local-orbit event store.
+    // This is used when upstream thread/resume/thread/get does not replay history.
+    if (!threadId) return;
+    if (this.#loadedThreads.has(threadId)) return;
+    this.#loadedThreads.add(threadId);
+
+    try {
+      const text = await api.getText(`/threads/${threadId}/events`);
+      if (!text.trim()) return;
+      const lines = text.split(/\r?\n/).filter(Boolean);
+      for (const line of lines) {
+        try {
+          const msg = JSON.parse(line) as RpcMessage;
+          this.handleMessage(msg);
+        } catch {
+          // ignore malformed line
+        }
+      }
+    } catch {
+      // ignore failures (no events yet, endpoint unavailable, etc.)
     }
   }
 

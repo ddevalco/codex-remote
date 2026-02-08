@@ -75,8 +75,35 @@ async function request<T>(
   return JSON.parse(text) as T;
 }
 
+async function requestText(
+  method: string,
+  path: string,
+  body?: unknown
+): Promise<string> {
+  const baseUrl = getBaseUrl();
+  if (!baseUrl) {
+    throw new ApiError(0, "No API URL configured");
+  }
+
+  let response = await doFetch(method, baseUrl, path, body);
+  if (response.status === 401) {
+    const refreshed = await auth.tryRefresh();
+    if (refreshed) {
+      response = await doFetch(method, baseUrl, path, body);
+    }
+  }
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new ApiError(response.status, text || response.statusText);
+  }
+
+  return await response.text();
+}
+
 export const api = {
   get: <T>(path: string) => request<T>("GET", path),
+  getText: (path: string) => requestText("GET", path),
   post: <T>(path: string, body?: unknown) => request<T>("POST", path, body),
   patch: <T>(path: string, body: unknown) => request<T>("PATCH", path, body),
   delete: <T>(path: string) => request<T>("DELETE", path),

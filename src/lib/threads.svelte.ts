@@ -129,6 +129,10 @@ class ThreadsStore {
       id: getId,
       params: { threadId, includeTurns: true, include_turns: true },
     });
+
+    // Always attempt a best-effort event replay from Pocket's local store.
+    // This ensures history shows up even if upstream does not replay turns.
+    void messages.rehydrateFromEvents(threadId);
   }
 
   start(
