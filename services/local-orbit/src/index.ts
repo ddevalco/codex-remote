@@ -970,6 +970,19 @@ async function relay(fromRole: Role, msgText: string): Promise<void> {
       return;
     }
 
+    // Symmetric safety: if the anchor responds before the client subscription has been registered,
+    // the reply can get dropped, which looks like a "blank thread" in the UI.
+    //
+    // Only do this for RPC-style responses (presence of `id`), to avoid spamming all clients with
+    // background streaming updates for threads they aren't watching.
+    if (fromRole === "anchor" && (!set || set.size === 0)) {
+      const hasRpcId = typeof (msg as any).id === "number" || typeof (msg as any).id === "string";
+      if (hasRpcId) {
+        for (const ws of clientSockets.keys()) send(ws, msgOut);
+        return;
+      }
+    }
+
     for (const ws of set ?? []) send(ws, msgOut);
     return;
   }

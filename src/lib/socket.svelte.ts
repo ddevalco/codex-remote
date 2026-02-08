@@ -162,7 +162,13 @@ class SocketStore {
         }
 
         for (const handler of this.#messageHandlers) {
-          handler(msg as RpcMessage);
+          try {
+            handler(msg as RpcMessage);
+          } catch (err) {
+            // Never let a single store exception break the whole app; it can manifest as
+            // "blank threads" (history not hydrating) and broken navigation.
+            console.error("[socket] message handler threw", err);
+          }
         }
       } catch {
         console.error("Failed to parse message:", event.data);
