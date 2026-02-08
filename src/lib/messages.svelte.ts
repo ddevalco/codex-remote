@@ -556,7 +556,10 @@ class MessagesStore {
   }
 
   handleMessage(msg: RpcMessage) {
-    if (msg.result && !msg.method) {
+    // Most Codex app-server responses come back as `{ id, result }` with no `method`,
+    // but some relays/proxies may preserve the request method on the response.
+    // Be permissive: if we see a `result` with a thread + turns payload, treat it as history.
+    if (msg.result && (!msg.method || msg.method === "thread/read" || msg.method === "thread/get")) {
       // Thread history can come back in slightly different shapes depending on the upstream
       // Codex app-server version. Be permissive.
       const result = msg.result as any;
