@@ -1,5 +1,5 @@
 import { hostname, homedir } from "node:os";
-import { mkdirSync, writeFileSync, existsSync } from "node:fs";
+import { mkdirSync, writeFileSync, existsSync, readFileSync } from "node:fs";
 import { readdir, stat, unlink, mkdir as mkdirAsync } from "node:fs/promises";
 import { dirname, join, basename } from "node:path";
 import { Database } from "bun:sqlite";
@@ -46,7 +46,8 @@ function loadConfigJson(): Record<string, unknown> | null {
   const path = CONFIG_JSON_PATH || (existsSync(DEFAULT_CONFIG_JSON_PATH) ? DEFAULT_CONFIG_JSON_PATH : "");
   if (!path) return null;
   try {
-    const text = Bun.file(path).textSync();
+    // Bun.file().textSync() is not available in all Bun versions; use node:fs for sync reads.
+    const text = readFileSync(path, "utf8");
     return JSON.parse(text) as Record<string, unknown>;
   } catch {
     return null;
