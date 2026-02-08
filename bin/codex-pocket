@@ -473,23 +473,28 @@ cmd_start() {
     host="$(config_host)"
     local port
     port="$(config_port)"
-    ZANE_LOCAL_TOKEN="$(token)" \
-    ZANE_LOCAL_CONFIG_JSON="$CONFIG_JSON" \
-    ZANE_LOCAL_HOST="$host" \
-    ZANE_LOCAL_PORT="$port" \
-    ZANE_LOCAL_DB="$(db_path)" \
-    ZANE_LOCAL_RETENTION_DAYS="$(retention_days)" \
-    ZANE_LOCAL_PUBLIC_ORIGIN="$pub" \
-    ZANE_LOCAL_UI_DIST_DIR="$APP_DIR/app/dist" \
-    ZANE_LOCAL_ANCHOR_CWD="$APP_DIR/app/services/anchor" \
-    ZANE_LOCAL_ANCHOR_LOG="$APP_DIR/anchor.log" \
-    ANCHOR_HOST="127.0.0.1" \
-    ANCHOR_PORT="$aport" \
-    ZANE_LOCAL_ANCHOR_CMD="$bun_bin" \
-    ZANE_LOCAL_AUTOSTART_ANCHOR="1" \
-    "$bun_bin" run "$APP_DIR/app/services/local-orbit/src/index.ts" >>"$APP_DIR/server.log" 2>&1 &
+    # Use nohup so the service survives when started from a non-interactive shell
+    # (common during update/install flows). This was the root cause of "it started
+    # and then immediately died" reports.
+    nohup env \
+      ZANE_LOCAL_TOKEN="$(token)" \
+      ZANE_LOCAL_CONFIG_JSON="$CONFIG_JSON" \
+      ZANE_LOCAL_HOST="$host" \
+      ZANE_LOCAL_PORT="$port" \
+      ZANE_LOCAL_DB="$(db_path)" \
+      ZANE_LOCAL_RETENTION_DAYS="$(retention_days)" \
+      ZANE_LOCAL_PUBLIC_ORIGIN="$pub" \
+      ZANE_LOCAL_UI_DIST_DIR="$APP_DIR/app/dist" \
+      ZANE_LOCAL_ANCHOR_CWD="$APP_DIR/app/services/anchor" \
+      ZANE_LOCAL_ANCHOR_LOG="$APP_DIR/anchor.log" \
+      ANCHOR_HOST="127.0.0.1" \
+      ANCHOR_PORT="$aport" \
+      ZANE_LOCAL_ANCHOR_CMD="$bun_bin" \
+      ZANE_LOCAL_AUTOSTART_ANCHOR="1" \
+      "$bun_bin" run "$APP_DIR/app/services/local-orbit/src/index.ts" >>"$APP_DIR/server.log" 2>&1 </dev/null &
+    # `disown` isn't available in all shells; nohup does the heavy lifting.
     disown >/dev/null 2>&1 || true
-    echo $! >"$PID_FILE"
+    echo "$!" >"$PID_FILE"
     echo "Started (background pid: $(cat "$PID_FILE"))"
     local base
     base="$(base_url)"
