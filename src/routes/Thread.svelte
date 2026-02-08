@@ -136,8 +136,12 @@
     });
 
 
+    // Always open the thread when the route changes.
+    // We do not gate this on socket connectivity because:
+    // - opening triggers best-effort local event replay (history)
+    // - socket may temporarily be "connecting" during page load; gating causes blank threads
     $effect(() => {
-        if (threadId && socket.status === "connected" && threads.currentId !== threadId) {
+        if (threadId && threads.currentId !== threadId) {
             threads.open(threadId);
         }
     });

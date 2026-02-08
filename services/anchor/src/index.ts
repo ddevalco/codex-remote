@@ -283,6 +283,8 @@ async function buildOrbitUrl(): Promise<string | null> {
   if (!ORBIT_URL) return null;
   try {
     const url = new URL(ORBIT_URL);
+    // Provide a stable id so local-orbit can dedupe this device across reconnects.
+    url.searchParams.set("anchorId", `${hostname()}:${process.platform}`);
     // Local-Orbit mode: if connecting to a non-TLS ws:// URL on localhost, treat
     // ZANE_ANCHOR_JWT_SECRET as a shared bearer token (not a JWT).
     //

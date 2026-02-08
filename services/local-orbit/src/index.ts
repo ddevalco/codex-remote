@@ -1394,8 +1394,10 @@ const server = Bun.serve<{ role: Role }>({
     if (url.pathname === "/ws/client" || url.pathname === "/ws/anchor") {
       if (!authorised(req)) return new Response("Unauthorised", { status: 401 });
       const role: Role = url.pathname.endsWith("/anchor") ? "anchor" : "client";
+      const anchorId =
+        role === "anchor" ? (url.searchParams.get("anchorId") || url.searchParams.get("anchor_id")) : null;
 
-      if (server.upgrade(req, { data: { role } })) {
+      if (server.upgrade(req, { data: { role, ...(anchorId ? { anchorId } : {}) } as any })) {
         return new Response(null, { status: 101 });
       }
       return new Response("Upgrade required", { status: 426 });
@@ -1443,13 +1445,29 @@ const server = Bun.serve<{ role: Role }>({
       });
 
       if (role === "anchor") {
+        const stableId = typeof (ws.data as any)?.anchorId === "string" ? ((ws.data as any).anchorId as string) : "";
         const meta: AnchorMeta = {
-          // Temporary id until we learn hostname/platform (anchor.hello).
-          id: "pending",
+          // Stable id (preferred) so reconnects don't create duplicate devices.
+          // Fallback to "pending" until we learn hostname/platform (anchor.hello).
+          id: stableId.trim() ? stableId.trim() : "pending",
           hostname: "unknown",
           platform: "unknown",
           connectedAt: new Date().toISOString(),
         };
+        // If an anchor reconnects using the same stable id, close the previous socket.
+        if (stableId.trim()) {
+          for (const existing of anchorMeta.keys()) {
+            if (existing === ws) continue;
+            const em = anchorMeta.get(existing);
+            if (em?.id === stableId.trim()) {
+              try {
+                existing.close(1000, "replaced");
+              } catch {
+                // ignore
+              }
+            }
+          }
+        }
         anchorMeta.set(ws, meta);
         broadcastToClients({ type: "orbit.anchor-connected", anchor: meta });
       }
@@ -1484,8 +1502,8 @@ const server = Bun.serve<{ role: Role }>({
         if (meta) {
           meta.hostname = typeof obj.hostname === "string" ? obj.hostname : meta.hostname;
           meta.platform = typeof obj.platform === "string" ? obj.platform : meta.platform;
-          // Stable identity so UI can dedupe across reconnects.
-          if (meta.hostname !== "unknown" || meta.platform !== "unknown") {
+          // Only derive an id from hostname/platform if we don't already have a stable id.
+          if (meta.id === "pending" && (meta.hostname !== "unknown" || meta.platform !== "unknown")) {
             meta.id = `${meta.hostname}:${meta.platform}`;
           }
           broadcastToClients({ type: "orbit.anchor-connected", anchor: meta });

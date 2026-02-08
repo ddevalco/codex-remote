@@ -2,6 +2,7 @@
   import { socket } from "../lib/socket.svelte";
   import { threads } from "../lib/threads.svelte";
   import { messages } from "../lib/messages.svelte";
+  import { navigate } from "../router";
   import { models } from "../lib/models.svelte";
   import { theme } from "../lib/theme.svelte";
   import { auth } from "../lib/auth.svelte";
@@ -210,7 +211,15 @@
         <ul class="thread-list">
           {#each visibleThreads as thread (thread.id)}
             <li class="thread-item row">
-              <a class="thread-link row" href="/thread/{thread.id}">
+              <a
+                class="thread-link row"
+                href="/thread/{thread.id}"
+                onclick={(e) => {
+                  e.preventDefault();
+                  threads.open(thread.id);
+                  navigate("/thread/:id", { params: { id: thread.id } });
+                }}
+              >
                 <span class="thread-icon">›</span>
                 <span class="thread-preview">{thread.title || thread.name || thread.preview || "New thread"}</span>
                 <span class="thread-meta">{formatTime(threadTime(thread.createdAt, thread.id))}</span>

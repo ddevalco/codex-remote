@@ -6,6 +6,11 @@ This project started as a local-only fork inspired by **Zane** by Z. Siddiqi (se
 
 ## Unreleased
 
+### Reliability
+- Anchors now provide a stable `anchorId` to local-orbit so device reconnects do not create duplicate "devices" in Settings.
+- Thread view now opens/resumes threads even while the socket is still connecting, reducing blank-thread cases during page load.
+- Thread list navigation now uses SPA navigation (prevents full reloads and preserves socket state).
+
 ### Ops / Self-Heal
 - Admin now includes **Validate** and **Repair** buttons to run server-side health checks and apply safe repairs.
 - CLI: added `codex-pocket ensure` (restart if needed, validate, repair, re-validate).
