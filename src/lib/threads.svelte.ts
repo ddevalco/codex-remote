@@ -113,7 +113,7 @@ class ThreadsStore {
     messages.clearThread(threadId);
     socket.subscribeThread(threadId);
 
-    const doResumeAndGet = () => {
+    const doResumeAndRead = () => {
       const id = this.#nextId++;
       this.#pendingRequests.set(id, "resume");
       socket.send({
@@ -124,31 +124,41 @@ class ThreadsStore {
 
       // Some Codex app-server versions do not replay historical turns on thread/resume.
       // Try a best-effort fetch to backfill transcript for existing threads.
-      const getId = this.#nextId++;
-      this.#pendingRequests.set(getId, `get:${threadId}`);
+      //
+      // NOTE: Codex app-server does not implement `thread/get`. Use `thread/read` with
+      // include flags instead.
+      const readId = this.#nextId++;
+      this.#pendingRequests.set(readId, `read:${threadId}`);
       socket.send({
-        method: "thread/get",
-        id: getId,
-        params: { threadId, includeTurns: true, include_turns: true },
+        method: "thread/read",
+        id: readId,
+        params: {
+          threadId,
+          // Support multiple param spellings across app-server versions.
+          includeTurns: true,
+          include_turns: true,
+          includeItems: true,
+          include_items: true,
+        },
       });
     };
 
     if (socket.isHealthy) {
-      doResumeAndGet();
+      doResumeAndRead();
     } else {
       // If we're not connected yet, opening immediately would clear the UI and then never load history.
       // Retry once the socket connects.
       const off = socket.onConnect(() => {
         off();
         if (this.currentId !== threadId) return;
-        doResumeAndGet();
+        doResumeAndRead();
       });
     }
 
     // Fallback: only attempt local event replay if upstream did not load history.
     //
     // Important: the local event store can be extremely large for older threads
-    // (e.g. repeated `thread/get` snapshots). Replaying it unconditionally can freeze
+    // (e.g. repeated `thread/read` snapshots). Replaying it unconditionally can freeze
     // the UI on both mobile and desktop, which manifests as "blank threads" and
     // broken navigation. Delay + gate this to keep the common path fast.
     setTimeout(() => {
@@ -250,9 +260,9 @@ class ThreadsStore {
           const metaId = this.#nextId++;
           this.#pendingRequests.set(metaId, `meta:${t.id}`);
           socket.send({
-            method: "thread/get",
+            method: "thread/read",
             id: metaId,
-            params: { threadId: t.id, includeTurns: false, include_turns: false },
+            params: { threadId: t.id, includeTurns: false, include_turns: false, includeItems: false, include_items: false },
           });
         }
       }
@@ -290,7 +300,7 @@ class ThreadsStore {
         }
       }
 
-      if (typeof type === "string" && (type.startsWith("get:") || type.startsWith("meta:")) && msg.result) {
+      if (typeof type === "string" && (type.startsWith("read:") || type.startsWith("meta:")) && msg.result) {
         const result = msg.result as any;
         const threadObj =
           result?.thread ??

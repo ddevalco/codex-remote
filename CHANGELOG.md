@@ -29,7 +29,7 @@ This project started as a local-only fork inspired by **Zane** by Z. Siddiqi (se
 ## 2026-02-07
 
 ### Thread Titles / Rename Sync
-- Thread list titles now match Codex Desktop renamed titles by reading `~/.codex/.codex-global-state.json` and injecting `title/name/displayName` into `thread/list` + `thread/get` payloads. (commits `74db0ba`, `93c2702`)
+- Thread list titles now match Codex Desktop renamed titles by reading `~/.codex/.codex-global-state.json` and injecting `title/name/displayName` into `thread/list` + `thread/read` payloads. (commits `74db0ba`, `93c2702`)
 - Added a thread rename action in Codex Pocket that updates Codex Desktop's title store (Admin token required). (commit `133d3da`)
 
 ### Vision / Attachments

@@ -52,7 +52,7 @@ Responsibilities:
 Codex Pocket injects user-renamed thread titles by reading Codex Desktop's local title store:
 - `~/.codex/.codex-global-state.json` (`thread-titles.titles[threadId]`)
 
-This is done inside local-orbit as a presentation-only enrichment step for `thread/list` and `thread/get` payloads.
+This is done inside local-orbit as a presentation-only enrichment step for `thread/list` and `thread/read` payloads.
 
 Codex Pocket can also rename threads by updating the same title store file (Admin-token protected).
 

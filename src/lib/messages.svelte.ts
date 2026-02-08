@@ -186,7 +186,7 @@ class MessagesStore {
 
   async rehydrateFromEvents(threadId: string) {
     // Best-effort transcript restore from Codex Pocket's local-orbit event store.
-    // This is used when upstream thread/resume/thread/get does not replay history.
+    // This is used when upstream thread/resume/thread/read does not replay history.
     if (!threadId) return;
     if (this.#eventsReplayed.has(threadId)) return;
     // If we don't yet have an auth token (common right after page load),
@@ -197,7 +197,7 @@ class MessagesStore {
     }
 
     // If the thread has large history, fetching the entire NDJSON payload can be enormous
-    // (especially if `thread/get` results are persisted repeatedly). Keep this lightweight:
+    // (especially if `thread/read` results are persisted repeatedly). Keep this lightweight:
     // - ask local-orbit for a bounded number of recent events
     // - iterate without pre-splitting
     // - stop early once we successfully hydrate any messages
@@ -205,8 +205,8 @@ class MessagesStore {
     try {
       // local-orbit accepts token via query string as well as Authorization header.
       const tokenParam = encodeURIComponent(auth.token);
-      // Prefer newest-first so we are more likely to encounter a recent `thread/get` snapshot early.
-      // Keep the limit small: a single `thread/get` snapshot can be several MB, and large threads
+      // Prefer newest-first so we are more likely to encounter a recent `thread/read` snapshot early.
+      // Keep the limit small: a single `thread/read` snapshot can be several MB, and large threads
       // can accumulate many of them over time.
       const text = await api.getText(`/threads/${threadId}/events?token=${tokenParam}&order=desc&limit=30`);
       if (!text.trim()) return;

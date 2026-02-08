@@ -872,7 +872,7 @@ async function injectThreadTitles(msg: Record<string, unknown>): Promise<void> {
     return;
   }
 
-  if ((method === "thread/get" || !method) && result) {
+  if ((method === "thread/get" || method === "thread/read" || !method) && result) {
     if (result.thread) applyToThread(result.thread);
     // Some upstream shapes return the thread object directly
     if (typeof result.id === "string") applyToThread(result);
@@ -1403,7 +1403,7 @@ const server = Bun.serve<{ role: Role }>({
       if (!threadId) return new Response("Not found", { status: 404 });
 
       try {
-        // IMPORTANT: threads can have very large event logs (e.g. repeated `thread/get` results).
+        // IMPORTANT: threads can have very large event logs (e.g. repeated `thread/read` results).
         // To keep mobile clients responsive, allow limiting + reversing the result set.
         const limitRaw = url.searchParams.get("limit");
         const limit =
