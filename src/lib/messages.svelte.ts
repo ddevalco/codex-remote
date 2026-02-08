@@ -196,14 +196,18 @@ class MessagesStore {
       return;
     }
 
-    // If the thread has large history, splitting the entire NDJSON payload into an array of lines
-    // can spike memory usage on mobile. Iterate without pre-splitting, and only mark replay "done"
-    // if we actually loaded any messages.
+    // If the thread has large history, fetching the entire NDJSON payload can be enormous
+    // (especially if `thread/get` results are persisted repeatedly). Keep this lightweight:
+    // - ask local-orbit for a bounded number of recent events
+    // - iterate without pre-splitting
+    // - stop early once we successfully hydrate any messages
     const before = this.getThreadMessages(threadId).length;
     try {
       // local-orbit accepts token via query string as well as Authorization header.
       const tokenParam = encodeURIComponent(auth.token);
-      const text = await api.getText(`/threads/${threadId}/events?token=${tokenParam}`);
+      // Prefer newest-first so we are more likely to encounter a recent `thread/get` snapshot early.
+      // NOTE: local-orbit will cap the limit server-side as well.
+      const text = await api.getText(`/threads/${threadId}/events?token=${tokenParam}&order=desc&limit=250`);
       if (!text.trim()) return;
 
       let i = 0;
@@ -225,6 +229,9 @@ class MessagesStore {
                 ? (parsed as RpcMessage)
                 : null;
           if (msg) this.handleMessage(msg);
+          // Stop early once we have any transcript. This avoids long synchronous parsing
+          // loops on large threads and prevents UI freezes that break navigation.
+          if (this.getThreadMessages(threadId).length > before) break;
         } catch {
           // ignore malformed line
         }

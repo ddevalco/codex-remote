@@ -1403,9 +1403,20 @@ const server = Bun.serve<{ role: Role }>({
       if (!threadId) return new Response("Not found", { status: 404 });
 
       try {
-        const rows = db
-          .prepare("SELECT payload FROM events WHERE thread_id = ? ORDER BY id ASC")
-          .all(threadId) as Array<{ payload: string }>;
+        // IMPORTANT: threads can have very large event logs (e.g. repeated `thread/get` results).
+        // To keep mobile clients responsive, allow limiting + reversing the result set.
+        const limitRaw = url.searchParams.get("limit");
+        const limit =
+          limitRaw && /^[0-9]+$/.test(limitRaw) ? Math.max(0, Math.min(5000, Number(limitRaw))) : null;
+        const order = (url.searchParams.get("order") || "asc").toLowerCase() === "desc" ? "DESC" : "ASC";
+
+        const rows = (
+          limit != null
+            ? db
+                .prepare(`SELECT payload FROM events WHERE thread_id = ? ORDER BY id ${order} LIMIT ?`)
+                .all(threadId, limit)
+            : db.prepare(`SELECT payload FROM events WHERE thread_id = ? ORDER BY id ${order}`).all(threadId)
+        ) as Array<{ payload: string }>;
         const body = rows.length ? rows.map((r) => r.payload).join("\n") + "\n" : "";
         return new Response(body, { status: 200, headers: { "content-type": "application/x-ndjson" } });
       } catch {
